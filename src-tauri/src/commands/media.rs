@@ -47,7 +47,7 @@ fn fnv(bytes: &[u8]) -> u64 {
 }
 
 /// Cache key that changes when the file is replaced or edited.
-fn cache_key(path: &str) -> String {
+pub fn cache_key(path: &str) -> String {
     let meta = std::fs::metadata(path).ok();
     let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
     let mtime = meta
