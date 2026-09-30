@@ -1,0 +1,43 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Import a 4K MOV from an iPhone
+        2. Split at 00:10
+        3. Export with the "YouTube 1080p" preset
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows version, CPU and GPU
+      placeholder: Windows 11 24H2, Ryzen 7 7700, Radeon iGPU
+  - type: textarea
+    id: media
+    attributes:
+      label: Media details (if relevant)
+      description: Codec, resolution and frame rate. Hover a file in the Media panel to see them.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error message / export log
+      render: text

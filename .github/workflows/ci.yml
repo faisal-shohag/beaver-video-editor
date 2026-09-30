@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FFMPEG_VERSION: "8.1.1"
+
+jobs:
+  test:
+    name: Lint & test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cache FFmpeg download
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ffmpeg-${{ env.FFMPEG_VERSION }}.zip
+          key: ffmpeg-${{ env.FFMPEG_VERSION }}-full
+
+      - name: Bundle FFmpeg sidecars
+        shell: pwsh
+        run: |
+          $env:TEMP = "${{ runner.temp }}"
+          ./scripts/bundle-ffmpeg.ps1 -Download -Version $env:FFMPEG_VERSION
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Frontend tests
+        run: pnpm test
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: rustfmt
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests (incl. real FFmpeg renders)
+        working-directory: src-tauri
+        run: cargo test
