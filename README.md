@@ -30,6 +30,18 @@ Requires Windows 10 or 11 (x64). FFmpeg is bundled. The installers aren't code-s
 | **Export** | Three engines: **Fastest**, **Best compression** and **Lossless copy**. 12 presets (YouTube, Reels/TikTok, small file, HEVC, AV1, WebM, ProRes master, GIF, MP3, WAV) plus your own saved presets. Size control by quality, bitrate or target file size. Export the whole timeline or the In→Out range. Multiple exports run in a queue with progress, fps and time remaining. |
 | **Safety** | Undo/redo (200 steps), `.beaver` project files, crash-safe autosave with restore, and a warning before quitting with unsaved changes. |
 
+## Enhance voice
+
+Select a clip, then choose a model in the Inspector:
+
+| Model | Use it for | Speed (Ryzen 7 7700) | Size |
+|---|---|---|---|
+| **Fast**: DeepFilterNet3 | Background noise: fans, traffic, hum, keyboard | ~25× real time, 1 core | bundled |
+| **Strong**: DPDFNet-2 48k | Busy real-world noise | ~8× real time | 10 MB download |
+| **Restore**: Sidon | Echo/reverb, phone-quality or muffled recordings | ~2× real time, ~4 GB RAM | 286 MB download |
+
+These three were picked from 13 models (including facebook/denoiser, MossFormer2, Resemble Enhance and VoiceFixer) by measuring quality (DNSMOS, PESQ, ESTOI, SI-SDR) and speed on this PC. The full tables are in [`bench/audio-enhance/results.md`](bench/audio-enhance/results.md). The in-app Rust ports score within 0.005 DNSMOS of the reference Python implementations.
+
 ## Export engines (measured on the target PC)
 
 The app benchmarks every available encoder on first launch using a noisy 1080p test clip. The results are cached in `%APPDATA%\com.beaver.videoeditor\encoders.json`; click the GPU chip in the top bar to re-run the benchmark.
