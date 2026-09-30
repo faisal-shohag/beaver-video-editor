@@ -36,7 +36,7 @@ pub fn enhance(
         let (out_spec, new_state) =
             onnx::run2(&mut session, &names, (vec![1, 1, bins as i64, 2], &frame), (vec![state.len() as i64], &state))?;
         state = new_state;
-        enhanced.push(out_spec.chunks_exact(2).map(|p| Complex32::new(p[0], p[1])).collect());
+        enhanced.push(out_spec.as_chunks::<2>().0.iter().map(|[re, im]| Complex32::new(*re, *im)).collect());
         if t % 200 == 0 {
             progress(t as f64 / noisy.len() as f64)?;
         }

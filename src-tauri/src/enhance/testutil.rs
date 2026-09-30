@@ -9,7 +9,7 @@ pub fn fixture_dir() -> PathBuf {
 pub fn fixture(name: &str) -> (Vec<f32>, Vec<usize>) {
     let dir = fixture_dir();
     let bytes = std::fs::read(dir.join(format!("{name}.f32"))).expect("fixture");
-    let data = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    let data = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
     let meta: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{name}.json"))).unwrap()).unwrap();
     let shape = meta["shape"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();

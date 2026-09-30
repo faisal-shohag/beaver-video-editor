@@ -80,15 +80,8 @@ impl FeatureExtractor {
             .map(|n| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * n as f64 / (FRAME - 1) as f64).cos()).powf(0.85))
             .collect();
         let raw = include_bytes!("assets/w2vbert_mel_257x80.f32");
-        let vals: Vec<f32> = raw.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
-        let mel = vals
-            .chunks_exact(MELS)
-            .map(|row| {
-                let mut r = [0f32; MELS];
-                r.copy_from_slice(row);
-                r
-            })
-            .collect();
+        let vals: Vec<f32> = raw.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
+        let mel = vals.as_chunks::<MELS>().0.to_vec();
         FeatureExtractor { window, mel }
     }
 
