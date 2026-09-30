@@ -22,7 +22,8 @@ if (import.meta.env.DEV) {
     import("./store/ui"),
     import("./store/runtime"),
     import("./features/export/jobs"),
-  ]).then(([importer, project, ui, runtime, jobs]) => {
-    (window as unknown as Record<string, unknown>).__beaver = { importer, project, ui, runtime, jobs };
+    import("./features/enhance/enhance"),
+  ]).then(([importer, project, ui, runtime, jobs, enhance]) => {
+    (window as unknown as Record<string, unknown>).__beaver = { importer, project, ui, runtime, jobs, enhance };
   });
 }

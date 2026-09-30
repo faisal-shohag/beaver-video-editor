@@ -161,3 +161,28 @@ describe("tracks", () => {
     expect(ops.nearestSnap(4.2, [0, 4, 10], 0.05)).toBeNull();
   });
 });
+
+describe("enhance", () => {
+  it("sets, keeps through split, attaches rendered file, and clears", () => {
+    let p = edit(base(), (d) => void ops.appendMedia(d, [d.media[0]]));
+    const id = p.clips[0].id;
+    p = edit(p, (d) => ops.setEnhance(d, [id], { model: "dfn3", strength: "full", path: null }));
+    p = edit(p, (d) => void ops.splitClips(d, [id], 4));
+    expect(p.clips.every((c) => c.enhance?.model === "dfn3")).toBe(true);
+    p = edit(p, (d) => ops.attachEnhanced(d, "C:/m/m1.mp4", "dfn3", "full", "C:/cache/x.wav"));
+    expect(p.clips.every((c) => c.enhance?.path === "C:/cache/x.wav")).toBe(true);
+    // Split halves must not share one mutable enhance object.
+    p = edit(p, (d) => ops.setEnhance(d, [p.clips[0].id], { model: "sidon", strength: "full", path: null }));
+    expect(p.clips[1].enhance?.model).toBe("dfn3");
+    p = edit(p, (d) => ops.setEnhance(d, [p.clips[1].id], null));
+    expect(p.clips[1].enhance).toBeNull();
+  });
+
+  it("changing strength resets the rendered path", () => {
+    let p = edit(base(), (d) => void ops.appendMedia(d, [d.media[0]]));
+    const id = p.clips[0].id;
+    p = edit(p, (d) => ops.setEnhance(d, [id], { model: "dfn3", strength: "full", path: "C:/cache/a.wav" }));
+    p = edit(p, (d) => ops.setEnhance(d, [id], { model: "dfn3", strength: "light", path: null }));
+    expect(p.clips[0].enhance?.path).toBeNull();
+  });
+});

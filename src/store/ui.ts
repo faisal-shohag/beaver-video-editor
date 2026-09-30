@@ -21,6 +21,8 @@ interface UiState {
   joinOpen: boolean;
   /** Media being dragged from the bin (pointer based; HTML5 DnD is blocked by the webview). */
   dragMedia: { ids: string[]; x: number; y: number } | null;
+  /** A/B: play the media's original audio instead of its enhanced voice while held. */
+  hearOriginal: boolean;
   toast: { id: number; text: string; kind: "info" | "error" } | null;
 
   set: (p: Partial<UiState>) => void;
@@ -45,6 +47,7 @@ export const useUi = create<UiState>((set) => ({
   exportOpen: false,
   joinOpen: false,
   dragMedia: null,
+  hearOriginal: false,
   toast: null,
 
   set: (p) => set(p),

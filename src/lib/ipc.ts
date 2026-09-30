@@ -1,6 +1,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   EncoderReport,
+  EnhanceModelId,
+  EnhanceModelStatus,
+  EnhanceStrength,
   ExportSettings,
   JoinCheck,
   MediaInfo,
@@ -18,7 +21,14 @@ export const ipc = {
   getEncoders: (force = false) => invoke<EncoderReport>("get_encoders", { force }),
   startExport: (jobId: string, project: Project, settings: ExportSettings) =>
     invoke<void>("start_export", { jobId, project, settings }),
-  cancelExport: (jobId: string) => invoke<void>("cancel_export", { jobId }),
+  cancelExport: (jobId: string) => invoke<void>("cancel_job", { jobId }),
+  cancelJob: (jobId: string) => invoke<void>("cancel_job", { jobId }),
+  enhanceModels: () => invoke<EnhanceModelStatus[]>("enhance_models"),
+  downloadModel: (jobId: string, model: EnhanceModelId) => invoke<void>("download_model", { jobId, model }),
+  startEnhance: (jobId: string, mediaPath: string, duration: number, model: EnhanceModelId, strength: EnhanceStrength) =>
+    invoke<void>("start_enhance", { jobId, mediaPath, duration, model, strength }),
+  enhancedPath: (mediaPath: string, model: EnhanceModelId, strength: EnhanceStrength) =>
+    invoke<string | null>("enhanced_path", { mediaPath, model, strength }),
   checkCopyEligible: (project: Project, settings: ExportSettings) =>
     invoke<void>("check_copy_eligible", { project, settings }),
   quickJoinCheck: (paths: string[]) => invoke<JoinCheck>("quick_join_check", { paths }),

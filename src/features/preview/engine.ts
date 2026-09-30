@@ -16,6 +16,32 @@ interface Slot {
   el: HTMLVideoElement;
   src: string;
   lastUsed: number;
+  /** Enhanced voice track, played instead of the media's own audio. */
+  voice?: { el: HTMLAudioElement; src: string };
+}
+
+/**
+ * Keep a media element at `desired` source time: play/pause, rate, drift correction.
+ * With `nudge` (the enhanced-voice element), small drift is pulled in by adjusting the playback
+ * rate up to ±5% instead of seeking, so lip sync stays within a frame without audible jumps.
+ */
+function drive(el: HTMLMediaElement, desired: number, rate: number, playing: boolean, tolerance: number, nudge = false) {
+  if (playing) {
+    const drift = el.currentTime - desired;
+    let target = rate;
+    if (nudge && !el.paused && Math.abs(drift) > 0.005) target = rate * (1 - Math.max(-0.05, Math.min(0.05, drift * 1.5)));
+    if (Math.abs(el.playbackRate - target) > 1e-4) el.playbackRate = target;
+    if (el.paused) {
+      if (Math.abs(drift) > 0.04) el.currentTime = desired;
+      el.play().catch(() => {});
+    } else if (!el.seeking && Math.abs(drift) > 0.15 * Math.max(1, rate)) {
+      el.currentTime = desired;
+    }
+  } else {
+    if (el.playbackRate !== rate) el.playbackRate = rate;
+    if (!el.paused) el.pause();
+    if (!el.seeking && Math.abs(el.currentTime - desired) > tolerance) el.currentTime = desired;
+  }
 }
 
 const PRELOAD_AHEAD = 1.5; // seconds
@@ -195,10 +221,33 @@ export class PreviewEngine {
   }
 
   private dispose(s: Slot) {
-    s.el.pause();
-    s.el.removeAttribute("src");
-    s.el.load();
-    s.el.remove();
+    for (const el of [s.el, s.voice?.el]) {
+      if (!el) continue;
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+      el.remove();
+    }
+    s.voice = undefined;
+  }
+
+  /** Attach, swap or drop the enhanced-voice element to match the clip. */
+  private syncVoice(s: Slot, c: Clip) {
+    const src = c.enhance?.path ? fileUrl(c.enhance.path) : null;
+    if (s.voice && s.voice.src !== src) {
+      s.voice.el.pause();
+      s.voice.el.removeAttribute("src");
+      s.voice.el.load();
+      s.voice.el.remove();
+      s.voice = undefined;
+    }
+    if (src && !s.voice) {
+      const el = document.createElement("audio");
+      el.preload = "auto";
+      el.src = src;
+      this.host.appendChild(el);
+      s.voice = { el, src };
+    }
   }
 
   private sync(p: Project, t: number, playing: boolean, now: number) {
@@ -224,31 +273,31 @@ export class PreviewEngine {
 
       if (!isActive) {
         // Preload: park on the first frame so the cut is instant.
-        if (!el.paused) el.pause();
-        if (!el.seeking && Math.abs(el.currentTime - c.in) > tolerance) el.currentTime = c.in;
-        el.muted = true;
+        this.syncVoice(s, c);
+        for (const media of [el, s.voice?.el]) {
+          if (!media) continue;
+          if (!media.paused) media.pause();
+          if (!media.seeking && Math.abs(media.currentTime - c.in) > tolerance) media.currentTime = c.in;
+          media.muted = true;
+        }
         continue;
       }
 
       const desired = c.in + (t - c.start) * c.speed;
       const silent = track.muted || (track.kind === "video" && c.audioDetached) || !m.hasAudio;
       const vol = silent ? 0 : Math.min(1, c.volume * track.volume);
-      el.volume = vol;
-      el.muted = vol <= 0.001 || !playing;
-      el.preservesPitch = c.preservePitch;
       const rate = Math.min(16, Math.max(0.0625, c.speed * u.shuttle));
-      if (el.playbackRate !== rate) el.playbackRate = rate;
-
-      if (playing) {
-        if (el.paused) {
-          if (Math.abs(el.currentTime - desired) > 0.04) el.currentTime = desired;
-          el.play().catch(() => {});
-        } else if (!el.seeking && Math.abs(el.currentTime - desired) > 0.15 * Math.max(1, rate)) {
-          el.currentTime = desired;
-        }
-      } else {
-        if (!el.paused) el.pause();
-        if (!el.seeking && Math.abs(el.currentTime - desired) > tolerance) el.currentTime = desired;
+      this.syncVoice(s, c);
+      // With an enhanced voice, the video element is picture-only unless "hear original" is held.
+      const voiceAudible = !!s.voice && !u.hearOriginal;
+      for (const [media, audible] of [
+        [el, !voiceAudible],
+        ...(s.voice ? [[s.voice.el, voiceAudible] as const] : []),
+      ] as const) {
+        media.volume = vol;
+        media.muted = !audible || vol <= 0.001 || !playing;
+        media.preservesPitch = c.preservePitch;
+        drive(media, desired, rate, playing, tolerance, media !== el);
       }
     }
 
@@ -257,6 +306,7 @@ export class PreviewEngine {
     idle.sort((a, b) => b[1].lastUsed - a[1].lastUsed);
     idle.forEach(([id, s], i) => {
       if (!s.el.paused) s.el.pause();
+      s.voice?.el.pause();
       if (i >= MAX_IDLE_SLOTS || now - s.lastUsed > IDLE_RELEASE_MS || !p.clips.some((c) => c.id === id)) {
         this.dispose(s);
         this.slots.delete(id);

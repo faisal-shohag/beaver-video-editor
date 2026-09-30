@@ -56,6 +56,45 @@ export interface Clip {
   scale: number;
   /** Video clip whose audio lives on an audio track. */
   audioDetached: boolean;
+  /** Voice enhancement; `path` is the cached enhanced audio once rendered. */
+  enhance?: Enhance | null;
+}
+
+export type EnhanceModelId = "dfn3" | "dpdfnet2" | "sidon";
+export type EnhanceStrength = "light" | "medium" | "full";
+
+export interface Enhance {
+  model: EnhanceModelId;
+  strength: EnhanceStrength;
+  path: string | null;
+}
+
+export interface EnhanceModelStatus {
+  id: EnhanceModelId;
+  installed: boolean;
+  downloadBytes: number;
+  /** Measured real-time factor (processing time / audio duration). */
+  rtf: number;
+}
+
+export interface EnhanceDoneEvent {
+  jobId: string;
+  ok: boolean;
+  cancelled: boolean;
+  error: string | null;
+  path: string | null;
+  mediaPath: string;
+  model: EnhanceModelId;
+  strength: EnhanceStrength;
+  elapsedSecs: number;
+}
+
+export interface ModelDoneEvent {
+  jobId: string;
+  model: EnhanceModelId;
+  ok: boolean;
+  cancelled: boolean;
+  error: string | null;
 }
 
 export interface Project {

@@ -1,4 +1,5 @@
 // User-facing commands shared by keyboard shortcuts, toolbars and menus.
+import { relinkEnhanced } from "@/features/enhance/enhance";
 import { importPaths, prepareMedia } from "@/features/media-bin/importer";
 import { engine } from "@/features/preview/engine";
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, ipc } from "@/lib/ipc";
@@ -185,6 +186,7 @@ export async function loadProjectData(p: Project, path: string | null) {
     ui().notify(`Missing media: ${missing.map((m) => m.name).join(", ")}`, "error");
   }
   p.media.filter((_, i) => exists[i]).forEach(prepareMedia);
+  void relinkEnhanced();
 }
 
 export async function saveProject(saveAs = false): Promise<boolean> {
