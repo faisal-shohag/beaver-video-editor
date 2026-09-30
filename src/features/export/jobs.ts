@@ -36,6 +36,7 @@ export async function startExport(project: Project, settings: ExportSettings, du
       ...s.jobs,
       {
         id,
+        kind: "export",
         label: settings.outputPath.split(/[\\/]/).pop() ?? "export",
         output: settings.outputPath,
         settings,
@@ -63,6 +64,7 @@ export async function startQuickJoin(paths: string[], output: string, duration: 
       ...s.jobs,
       {
         id,
+        kind: "export",
         label: output.split(/[\\/]/).pop() ?? "join",
         output,
         settings: null,

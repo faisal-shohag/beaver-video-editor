@@ -1,11 +1,13 @@
 // Derived, non-persistent data: thumbnails, waveforms, proxy status, encoder report, export jobs.
 import { create } from "zustand";
-import type { EncoderReport, ExportSettings, Thumbnails } from "@/lib/types";
+import type { EncoderReport, EnhanceModelStatus, ExportSettings, Thumbnails } from "@/lib/types";
 
 export type ProxyStatus = "none" | "pending" | "ready" | "error";
 
 export interface ExportJob {
   id: string;
+  /** What the job does (the queue shows all background work). */
+  kind?: "export" | "enhance" | "download";
   label: string;
   output: string;
   settings: ExportSettings | null;
@@ -28,6 +30,7 @@ interface RuntimeState {
   encoders: EncoderReport | null;
   benchmarking: boolean;
   jobs: ExportJob[];
+  enhanceModels: EnhanceModelStatus[];
   set: (p: Partial<RuntimeState>) => void;
   updateJob: (id: string, p: Partial<ExportJob>) => void;
 }
@@ -39,6 +42,7 @@ export const useRuntime = create<RuntimeState>((set) => ({
   encoders: null,
   benchmarking: false,
   jobs: [],
+  enhanceModels: [],
   set: (p) => set(p),
   updateJob: (id, p) => set((s) => ({ jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...p } : j)) })),
 }));

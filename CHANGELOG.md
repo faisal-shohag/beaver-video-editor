@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Enhance voice:** clean up the speech on any clip, with three models chosen in a benchmark of 13 (see `bench/audio-enhance/results.md`):
+  - **Fast (DeepFilterNet3):** removes background noise at about 25× real time on one CPU core. Bundled.
+  - **Strong (DPDFNet-2 48 kHz):** stronger on busy real-world noise. 10 MB, downloaded on first use.
+  - **Restore (Sidon):** generative restoration that removes echo and reverb and fixes phone-quality or muffled audio. 286 MB, downloaded on first use.
+
+  Enhancement is non-destructive and cached per media file, so split clips reuse it. DeepFilterNet3 and DPDFNet-2 have Light / Medium / Full strength. You can hold a button to A/B against the original. The enhanced audio is used in preview and export, and enhanced clips show a ✦ badge and the cleaned-up waveform.
+- Audio enhancer benchmark harness in `bench/audio-enhance/`, with its results.
+
+### Changed
+
+- Background jobs (exports, enhancements, model downloads) share one queue and one cancel command (`cancel_job`).
+
 ## [0.1.0] - 2026-09-30
 
 First public release.

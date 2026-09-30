@@ -5,6 +5,7 @@ import type { Clip, Project } from "@/lib/types";
 import * as ops from "@/store/ops";
 import { useProject } from "@/store/project";
 import { useUi } from "@/store/ui";
+import { EnhancePanel } from "@/features/enhance/EnhancePanel";
 import { Gauge, RotateCcw, Unlink } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -168,6 +169,7 @@ function ClipPanel({ clips, project }: { clips: Clip[]; project: Project }) {
             <Unlink size={13} /> {c.audioDetached ? "Audio detached" : "Detach audio to track"}
           </Button>
         )}
+        <EnhancePanel clips={clips} project={project} />
       </Section>
 
       {allVideo && (

@@ -2,53 +2,15 @@
 use super::encoders::{default_encoder, EncoderState};
 use super::media::cache_dir;
 use crate::ffmpeg::graph::{self, RenderSpec};
-use crate::ffmpeg::progress::{ProgressParser, ProgressSample};
-use crate::ffmpeg::{self, last_lines, probe};
+use crate::ffmpeg::{self, probe};
+use crate::jobs::{self, run_ffmpeg_tracked as run_tracked, JobHandle, Jobs, Reporter};
 use crate::model::*;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State};
-
-#[derive(Clone, Default)]
-struct JobHandle {
-    cancelled: Arc<AtomicBool>,
-    children: Arc<Mutex<Vec<Child>>>,
-}
-
-impl JobHandle {
-    fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
-        for c in self.children.lock().unwrap().iter_mut() {
-            let _ = c.kill();
-        }
-    }
-    fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
-    }
-}
-
-#[derive(Default)]
-pub struct ExportState {
-    jobs: Mutex<HashMap<String, JobHandle>>,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct ProgressEvent {
-    job_id: String,
-    /// 0..1
-    progress: f64,
-    fps: f64,
-    speed: f64,
-    eta_secs: f64,
-    stage: String,
-}
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -61,76 +23,6 @@ struct DoneEvent {
     elapsed_secs: f64,
     size_bytes: u64,
     encoder: String,
-}
-
-struct Reporter {
-    app: AppHandle,
-    job_id: String,
-    started: Instant,
-    last_emit: Mutex<Instant>,
-}
-
-impl Reporter {
-    fn emit(&self, progress: f64, fps: f64, speed: f64, stage: &str, force: bool) {
-        let mut last = self.last_emit.lock().unwrap();
-        if !force && last.elapsed().as_millis() < 100 {
-            return;
-        }
-        *last = Instant::now();
-        let elapsed = self.started.elapsed().as_secs_f64();
-        let p = progress.clamp(0.0, 1.0);
-        let eta = if p > 0.01 { elapsed / p - elapsed } else { -1.0 };
-        let _ = self.app.emit(
-            "export://progress",
-            ProgressEvent { job_id: self.job_id.clone(), progress: p, fps, speed, eta_secs: eta, stage: stage.into() },
-        );
-    }
-}
-
-/// Run FFmpeg, streaming `-progress` samples to `on_progress`. Child is registered for cancel.
-fn run_tracked(args: &[String], job: &JobHandle, mut on_progress: impl FnMut(&ProgressSample)) -> Result<(), String> {
-    if job.is_cancelled() {
-        return Err("cancelled".into());
-    }
-    let mut child = ffmpeg::ffmpeg()
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("failed to start ffmpeg: {e}"))?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let mut stderr = child.stderr.take().ok_or("no stderr")?;
-    let pid = child.id();
-    job.children.lock().unwrap().push(child);
-    let err_thread = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = stderr.read_to_string(&mut s);
-        s
-    });
-    let mut parser = ProgressParser::default();
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        if let Some(sample) = parser.feed(&line) {
-            on_progress(&sample);
-        }
-    }
-    let status = {
-        let mut children = job.children.lock().unwrap();
-        let idx = children.iter().position(|c| c.id() == pid);
-        match idx {
-            Some(i) => children.remove(i).wait().map_err(|e| e.to_string())?,
-            None => return Err("process lost".into()),
-        }
-    };
-    let stderr_text = err_thread.join().unwrap_or_default();
-    if job.is_cancelled() {
-        return Err("cancelled".into());
-    }
-    if status.success() {
-        Ok(())
-    } else {
-        let msg = last_lines(&stderr_text, 6);
-        Err(if msg.is_empty() { format!("ffmpeg exited with {status}") } else { msg })
-    }
 }
 
 /// Pick the encoder. "Fastest" prefers the fastest measured hardware encoder (a single
@@ -359,12 +251,6 @@ fn turbo_export(
     Ok(format!("{encoder} ×{n_workers} parallel"))
 }
 
-fn register(state: &State<'_, ExportState>, job_id: &str) -> JobHandle {
-    let h = JobHandle::default();
-    state.jobs.lock().unwrap().insert(job_id.to_string(), h.clone());
-    h
-}
-
 fn finish(app: &AppHandle, job_id: &str, output: &str, started: Instant, encoder: String, result: Result<(), String>) {
     let cancelled = matches!(&result, Err(e) if e == "cancelled");
     if result.is_err() {
@@ -384,7 +270,7 @@ fn finish(app: &AppHandle, job_id: &str, output: &str, started: Instant, encoder
             encoder,
         },
     );
-    app.state::<ExportState>().jobs.lock().unwrap().remove(job_id);
+    jobs::unregister(app, job_id);
     // BEAVER_KEEP_EXPORT_TMP=1 keeps filter graphs and chunks for debugging.
     if std::env::var_os("BEAVER_KEEP_EXPORT_TMP").is_none() {
         if let Ok(d) = job_dir(app, job_id) {
@@ -396,7 +282,7 @@ fn finish(app: &AppHandle, job_id: &str, output: &str, started: Instant, encoder
 #[tauri::command]
 pub fn start_export(
     app: AppHandle,
-    state: State<'_, ExportState>,
+    state: State<'_, Jobs>,
     job_id: String,
     project: Project,
     settings: ExportSettings,
@@ -404,10 +290,10 @@ pub fn start_export(
     if project.clips.is_empty() {
         return Err("Timeline is empty".into());
     }
-    let job = register(&state, &job_id);
+    let job = state.register(&job_id);
     std::thread::spawn(move || {
         let started = Instant::now();
-        let rep = Reporter { app: app.clone(), job_id: job_id.clone(), started, last_emit: Mutex::new(Instant::now()) };
+        let rep = Reporter::new(&app, "export", &job_id);
         rep.emit(0.0, 0.0, 0.0, "Starting", true);
         let encoder = resolve_encoder(&app, &settings);
         let result = job_dir(&app, &job_id).and_then(|dir| match settings.mode {
@@ -435,11 +321,10 @@ pub fn start_export(
     Ok(())
 }
 
+/// Kept for older frontends; same as `cancel_job`.
 #[tauri::command]
-pub fn cancel_export(state: State<'_, ExportState>, job_id: String) {
-    if let Some(j) = state.jobs.lock().unwrap().get(&job_id) {
-        j.cancel();
-    }
+pub fn cancel_export(state: State<'_, Jobs>, job_id: String) {
+    jobs::cancel_job(state, job_id)
 }
 
 #[tauri::command]
@@ -492,15 +377,15 @@ pub async fn quick_join_check(paths: Vec<String>) -> Result<JoinCheck, String> {
 #[tauri::command]
 pub fn quick_join(
     app: AppHandle,
-    state: State<'_, ExportState>,
+    state: State<'_, Jobs>,
     job_id: String,
     paths: Vec<String>,
     output: String,
 ) -> Result<(), String> {
-    let job = register(&state, &job_id);
+    let job = state.register(&job_id);
     std::thread::spawn(move || {
         let started = Instant::now();
-        let rep = Reporter { app: app.clone(), job_id: job_id.clone(), started, last_emit: Mutex::new(Instant::now()) };
+        let rep = Reporter::new(&app, "export", &job_id);
         rep.emit(0.0, 0.0, 0.0, "Checking files", true);
         let result = (|| {
             let check = check_join(&paths)?;

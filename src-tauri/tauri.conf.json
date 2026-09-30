@@ -48,7 +48,8 @@
     ],
     "externalBin": [
       "binaries/ffmpeg",
-      "binaries/ffprobe"
+      "binaries/ffprobe",
+      "binaries/deep-filter"
     ],
     "windows": {
       "nsis": {
@@ -60,6 +61,9 @@
     "homepage": "https://github.com/faisal-shohag/beaver-video-editor",
     "shortDescription": "Fast, simple multi-track video editor",
     "longDescription": "Cut, split, join and speed-change video on a multi-track timeline, then export fast with GPU encoders or losslessly.",
-    "category": "Video"
+    "category": "Video",
+    "resources": {
+      "binaries/onnxruntime.dll": "onnxruntime.dll"
+    }
   }
 }

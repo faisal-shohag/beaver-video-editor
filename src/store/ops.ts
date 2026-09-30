@@ -275,6 +275,27 @@ export function setSpeed(p: Project, ids: string[], speed: number) {
   }
 }
 
+/** Turn voice enhancement on/off. A new model/strength clears the path until it's rendered. */
+export function setEnhance(p: Project, ids: string[], enhance: Clip["enhance"]) {
+  for (const c of p.clips) {
+    if (!ids.includes(c.id)) continue;
+    if (!enhance) c.enhance = null;
+    else if (c.enhance?.model !== enhance.model || c.enhance?.strength !== enhance.strength || enhance.path) {
+      c.enhance = { ...enhance };
+    }
+  }
+}
+
+/** After a render finishes: attach the file to every clip of that media with the same settings. */
+export function attachEnhanced(p: Project, mediaPath: string, model: string, strength: string, path: string) {
+  const mediaIds = new Set(p.media.filter((m) => m.path === mediaPath).map((m) => m.id));
+  for (const c of p.clips) {
+    if (mediaIds.has(c.mediaId) && c.enhance?.model === model && c.enhance.strength === strength) {
+      c.enhance.path = path;
+    }
+  }
+}
+
 export function updateClips(p: Project, ids: string[], patch: Partial<Clip>) {
   for (const c of p.clips) if (ids.includes(c.id)) Object.assign(c, patch);
 }

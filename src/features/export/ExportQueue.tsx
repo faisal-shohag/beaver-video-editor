@@ -19,7 +19,7 @@ export function ExportQueue() {
     <div className="fixed right-4 bottom-4 z-40 w-[380px] overflow-hidden rounded-xl border border-line bg-panel-2 shadow-2xl">
       <div className="flex h-9 items-center justify-between border-b border-line pr-1 pl-3">
         <span className="text-xs font-semibold">
-          {running ? `Exporting ${running}…` : "Exports"}
+          {running ? `Working on ${running}…` : "Background jobs"}
         </span>
         <div className="flex">
           <IconButton label={collapsed ? "Expand" : "Collapse"} onClick={() => setCollapsed(!collapsed)}>
@@ -62,7 +62,7 @@ function JobRow({ job }: { job: ExportJob }) {
           <button onClick={() => ipc.cancelExport(job.id)} className="rounded px-1.5 text-[11px] text-muted hover:bg-danger/15 hover:text-danger">
             Cancel
           </button>
-        ) : job.status === "done" ? (
+        ) : job.status === "done" && (job.kind ?? "export") === "export" ? (
           <IconButton label="Show in folder" onClick={() => revealItemInDir(job.output)}>
             <FolderOpen size={13} />
           </IconButton>
@@ -84,7 +84,12 @@ function JobRow({ job }: { job: ExportJob }) {
           </div>
         </>
       )}
-      {job.status === "done" && (
+      {job.status === "done" && (job.kind ?? "export") !== "export" && (
+        <div className="mt-1 font-mono text-[10px] text-muted">
+          {job.kind === "download" ? "Downloaded" : "Enhanced"} in {shortDuration(job.elapsedSecs ?? 0, true)}
+        </div>
+      )}
+      {job.status === "done" && (job.kind ?? "export") === "export" && (
         <div className="mt-1 font-mono text-[10px] text-muted">
           {shortDuration(job.elapsedSecs ?? 0, true)}
           {realtime > 0 && <span className={clsx(realtime >= 1 && "text-ok")}> · {realtime.toFixed(1)}× realtime</span>} ·{" "}

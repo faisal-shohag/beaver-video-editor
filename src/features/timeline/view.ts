@@ -1,5 +1,6 @@
 // Canvas timeline: rendering + pointer interaction. Redraws only when state changes.
 import { splitClipAt } from "@/app/actions";
+import { enhancedWaveform } from "@/features/enhance/enhance";
 import { engine } from "@/features/preview/engine";
 import { shortDuration, snapToFrame } from "@/lib/time";
 import type { Clip, MediaItem } from "@/lib/types";
@@ -606,7 +607,8 @@ export class TimelineView {
     }
 
     // Waveform
-    const wave = m && rt.waveforms[m.id];
+    // Enhanced clips show the cleaned-up waveform (falls back to the original while it loads).
+    const wave = m && ((c.enhance?.path && enhancedWaveform(c.enhance.path)) || rt.waveforms[m.id]);
     const audible = m?.hasAudio && !(isVideo && c.audioDetached);
     if (wave && audible) {
       const waveH = isVideo ? 14 : h - labelH - 3;
@@ -649,7 +651,8 @@ export class TimelineView {
         tx += bw + 4;
         ctx.fillStyle = C.label;
       }
-      const name = (m?.name ?? "Missing media") + (c.audioDetached && isVideo ? "  (audio detached)" : "");
+      const enhanced = c.enhance ? (c.enhance.path ? "✦ " : "… ") : "";
+      const name = enhanced + (m?.name ?? "Missing media") + (c.audioDetached && isVideo ? "  (audio detached)" : "");
       const maxW = x + w - tx - 6;
       if (maxW > 10) ctx.fillText(ellipsize(ctx, name, maxW), tx, y + labelH / 2 + 0.5);
     }

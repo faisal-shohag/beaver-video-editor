@@ -82,6 +82,7 @@ fn clip(id: &str, media: &str, track: &str, start: f64, i: f64, o: f64) -> Clip 
         y: 0.0,
         scale: 1.0,
         audio_detached: false,
+        enhance: None,
     }
 }
 
@@ -194,6 +195,40 @@ fn multitrack_pip_music_and_gap() {
     let info = render(&p, &s, "libx264");
     assert_dur(&info, 9.0);
     assert_eq!((info.width, info.height), (640, 360));
+}
+
+#[test]
+fn enhanced_clip_exports_with_enhanced_audio() {
+    // Stand-in "enhanced" render of a.mp4: same length, mono 48 kHz, a different tone.
+    let enhanced = workdir().join("a_enhanced.wav");
+    let args: Vec<String> = [
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=1000:duration=10",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-y",
+    ]
+    .map(String::from)
+    .into_iter()
+    .chain([enhanced.to_string_lossy().to_string()])
+    .collect();
+    ffmpeg::run_ffmpeg(&args).unwrap();
+    let mut c = clip("c1", "a", "v1", 0.0, 2.0, 8.0);
+    c.enhance = Some(Enhance {
+        model: EnhanceModel::Dfn3,
+        strength: EnhanceStrength::Full,
+        path: Some(enhanced.to_string_lossy().to_string()),
+    });
+    let p = project(vec![c]);
+    let info = render(&p, &settings(&out("enhanced.mp4")), "libx264");
+    assert_dur(&info, 6.0);
+    assert!(info.has_audio && info.has_video);
 }
 
 #[test]

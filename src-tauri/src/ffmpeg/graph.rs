@@ -144,9 +144,8 @@ struct Inputs {
 }
 
 impl Inputs {
-    fn add(&mut self, p: &Piece) -> usize {
-        // Export always reads the original file, never the preview proxy.
-        let path = &p.media.info.path;
+    /// Export always reads the original media (or its enhanced audio), never the preview proxy.
+    fn add(&mut self, path: &str, p: &Piece) -> usize {
         self.args.extend([
             "-ss".into(),
             secs(p.src_in),
@@ -187,7 +186,7 @@ pub fn build_render(spec: &RenderSpec) -> Result<RenderPlan, String> {
         if let Some((_, i)) = input_of.iter().find(|(id, _)| *id == piece.clip.id) {
             return *i;
         }
-        let i = inputs.add(piece);
+        let i = inputs.add(&piece.media.info.path, piece);
         input_of.push((piece.clip.id.clone(), i));
         i
     };
@@ -352,7 +351,11 @@ pub fn build_render(spec: &RenderSpec) -> Result<RenderPlan, String> {
                     continue;
                 }
                 let Some(pc) = piece(c, m, (rs, re), 0.01) else { continue };
-                let idx = input_for(&pc, &mut inputs);
+                // Enhanced audio lives in its own file on the media's timeline, so the same trim applies.
+                let idx = match c.enhanced_audio() {
+                    Some(path) => inputs.add(path, &pc),
+                    None => input_for(&pc, &mut inputs),
+                };
                 let seg_dur = pc.out_end - pc.out_start;
                 let label = format!("a{}", labels.len());
                 let mut chain = vec!["asetpts=PTS-STARTPTS".to_string(), format!("aresample={sr}")];
@@ -640,6 +643,9 @@ pub fn copy_eligibility(p: &Project, s: &ExportSettings) -> Result<(), String> {
         if (c.volume - 1.0).abs() > 1e-6 || (c.opacity - 1.0).abs() > 1e-6 || c.has_transform() || c.audio_detached {
             return Err("Volume, opacity or transform changes need a render".into());
         }
+        if c.enhance.is_some() {
+            return Err("Enhanced audio needs a render".into());
+        }
         if c.start.max(rs) - cursor > 0.05 {
             return Err("Gaps between clips need a render".into());
         }
@@ -844,6 +850,7 @@ mod tests {
             y: 0.0,
             scale: 1.0,
             audio_detached: false,
+            enhance: None,
         }
     }
 
@@ -979,6 +986,27 @@ mod tests {
         let pl = plan(&p, &settings());
         assert!(pl.filter.contains("anullsrc"));
         assert!(!pl.filter.contains(":a]"));
+    }
+
+    #[test]
+    fn enhanced_clip_reads_audio_from_enhanced_file() {
+        let mut c = clip("c1", "m1", "v1", 0.0, 2.0, 8.0);
+        c.speed = 2.0;
+        c.enhance = Some(Enhance {
+            model: EnhanceModel::Dfn3,
+            strength: EnhanceStrength::Full,
+            path: Some("C:/cache/m1_dfn3_full.wav".into()),
+        });
+        let p = project(vec![c]);
+        let pl = plan(&p, &settings());
+        let args = pl.args_inline();
+        let inputs: Vec<&String> = args.windows(2).filter(|w| w[0] == "-i").map(|w| &w[1]).collect();
+        assert_eq!(inputs, [&"C:/media/m1.mp4".to_string(), &"C:/cache/m1_dfn3_full.wav".to_string()]);
+        // Both inputs seek to the same source point; audio keeps its speed chain.
+        assert_eq!(args.iter().filter(|a| *a == "2").count(), 2, "{args:?}");
+        assert!(pl.filter.contains("[0:v]"));
+        assert!(pl.filter.contains("[1:a]asetpts=PTS-STARTPTS,aresample=48000,atempo=2"), "{}", pl.filter);
+        assert!(copy_eligibility(&p, &settings()).is_err());
     }
 
     #[test]

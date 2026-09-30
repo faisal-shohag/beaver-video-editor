@@ -13,7 +13,8 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-fn resolve(name: &str) -> PathBuf {
+/// A bundled sidecar next to the app executable, else the bare name (resolved via PATH).
+pub fn resolve(name: &str) -> PathBuf {
     // Tauri copies sidecars next to the app executable (dev and bundled builds alike).
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
         let candidate = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
@@ -34,7 +35,8 @@ pub fn ffprobe_path() -> &'static PathBuf {
     P.get_or_init(|| resolve("ffprobe"))
 }
 
-fn hidden(mut cmd: Command) -> Command {
+/// Wrap a command so it never flashes a console window on Windows.
+pub fn hidden(mut cmd: Command) -> Command {
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd

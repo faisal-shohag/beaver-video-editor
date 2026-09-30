@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui";
 import { ExportDialog } from "@/features/export/ExportDialog";
 import { ExportQueue } from "@/features/export/ExportQueue";
+import { listenToEnhance } from "@/features/enhance/enhance";
 import { listenToJobs } from "@/features/export/jobs";
 import { Inspector } from "@/features/inspector/Inspector";
 import { QuickJoin } from "@/features/join/QuickJoin";
@@ -41,6 +42,7 @@ export function App() {
   // One-time startup work.
   useEffect(() => {
     void listenToJobs();
+    void listenToEnhance();
     useRuntime.setState({ benchmarking: true });
     ipc
       .getEncoders(false)
