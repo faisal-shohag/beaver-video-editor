@@ -1,0 +1,9 @@
+data/
+models/
+out/
+envs/
+external/*/
+!external/README.md
+__pycache__/
+*.pyc
+listen.html
