@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-30
+
 ### Added
 
 - **Enhance voice:** clean up the speech on any clip, with three models chosen in a benchmark of 13 (see `bench/audio-enhance/results.md`):
@@ -44,5 +46,6 @@ First public release.
 - **Projects:** `.beaver` project files, undo/redo (200 steps), crash-safe autosave with restore, and a warning before quitting with unsaved changes.
 - **Installers:** Windows NSIS and MSI installers with FFmpeg bundled.
 
-[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/faisal-shohag/beaver-video-editor/releases/tag/v0.1.0
