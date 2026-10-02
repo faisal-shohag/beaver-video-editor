@@ -8,36 +8,51 @@ import * as ops from "@/store/ops";
 import { getProject, useProject } from "@/store/project";
 import { runtime, useRuntime } from "@/store/runtime";
 import { ui, useUi } from "@/store/ui";
+import { THEME_EVENT } from "@/lib/theme";
 import { produce } from "immer";
 import { EDGE_PX, RULER_H, computeLanes, laneAt, rulerStep, type Lane } from "./layout";
 
 const WAVE_PPS = 50; // matches WAVEFORM_PEAKS_PER_SEC in Rust
 
-const C = {
-  bg: "#111317",
-  laneA: "#15171c",
-  laneB: "#13151a",
-  line: "#23262e",
-  ruler: "#15171c",
-  rulerText: "#8b91a1",
-  tick: "#3a3f4b",
-  accent: "#f5a524",
-  playhead: "#ffffff",
-  video: "#2d3f9c",
-  videoSel: "#3a52c4",
-  audio: "#17684f",
-  audioSel: "#1f8a69",
-  wave: "rgba(190, 255, 225, 0.75)",
-  waveOnVideo: "rgba(255, 255, 255, 0.45)",
-  label: "#ffffff",
-  danger: "#f0525a",
-  range: "rgba(245, 165, 36, 0.10)",
-  rangeRuler: "rgba(245, 165, 36, 0.35)",
-};
+/** Canvas palette; values come from CSS variables so it follows the light/dark theme. */
+const PALETTE_VARS = {
+  bg: "--tl-bg",
+  laneA: "--tl-lane-a",
+  laneB: "--tl-lane-b",
+  line: "--tl-line",
+  divider: "--tl-divider",
+  ruler: "--tl-ruler",
+  rulerText: "--tl-ruler-text",
+  tick: "--tl-tick",
+  playhead: "--tl-playhead",
+  video: "--tl-video",
+  videoSel: "--tl-video-sel",
+  audio: "--tl-audio",
+  audioSel: "--tl-audio-sel",
+  wave: "--tl-wave",
+  waveOnVideo: "--tl-wave-on-video",
+  locked: "--tl-locked",
+  range: "--tl-range",
+  rangeRuler: "--tl-range-ruler",
+  ghost: "--tl-ghost",
+  select: "--tl-select",
+  accent: "--primary",
+  accentFg: "--primary-foreground",
+  danger: "--destructive",
+} as const;
+
+const C = { label: "#ffffff" } as Record<keyof typeof PALETTE_VARS, string> & { label: string };
+
+function refreshPalette() {
+  const style = getComputedStyle(document.documentElement);
+  for (const [key, cssVar] of Object.entries(PALETTE_VARS)) {
+    C[key as keyof typeof PALETTE_VARS] = style.getPropertyValue(cssVar).trim();
+  }
+}
 
 type Drag =
   | { kind: "scrub" }
-  | { kind: "pending"; ids: string[]; x0: number; y0: number; lane: Lane }
+  | { kind: "pending"; ids: string[]; x0: number; y0: number; lane: Lane; collapseTo?: string }
   | { kind: "move"; ids: string[]; x0: number; lane: Lane }
   | { kind: "trim"; id: string; side: "start" | "end" };
 
@@ -76,8 +91,19 @@ export class TimelineView {
   ) {
     this.rctx = ruler.getContext("2d")!;
     this.lctx = lanesCanvas.getContext("2d")!;
+    refreshPalette();
     const mark = () => (this.dirty = true);
-    this.unsubs.push(useProject.subscribe(mark), useUi.subscribe(mark), useRuntime.subscribe(mark));
+    const onTheme = () => {
+      refreshPalette();
+      mark();
+    };
+    window.addEventListener(THEME_EVENT, onTheme);
+    this.unsubs.push(
+      useProject.subscribe(mark),
+      useUi.subscribe(mark),
+      useRuntime.subscribe(mark),
+      () => window.removeEventListener(THEME_EVENT, onTheme),
+    );
     for (const el of [ruler, lanesCanvas]) {
       el.addEventListener("pointerdown", this.onDown);
       el.addEventListener("pointermove", this.onMove);
@@ -221,10 +247,15 @@ export class TimelineView {
     if (hit.clip) {
       const id = hit.clip.id;
       let sel = u.selection;
+      let collapseTo: string | undefined;
       if (e.ctrlKey || e.shiftKey || e.metaKey) {
         sel = sel.includes(id) ? sel.filter((s) => s !== id) : [...sel, id];
       } else if (!sel.includes(id)) {
         sel = [id];
+      } else if (sel.length > 1) {
+        // Keep the group so it can be dragged together; a plain click (no drag) narrows to this clip.
+        if (locked) sel = [id];
+        else collapseTo = id;
       }
       u.select(sel);
       if (sel.includes(id) && !locked) {
@@ -233,7 +264,7 @@ export class TimelineView {
           const c = p.clips.find((c) => c.id === s);
           return c && !ops.trackOf(p, c.trackId)?.locked;
         });
-        this.drag = { kind: "pending", ids: movable, x0: x, y0: y, lane: hit.lane! };
+        this.drag = { kind: "pending", ids: movable, x0: x, y0: y, lane: hit.lane!, collapseTo };
       }
       return;
     }
@@ -315,6 +346,7 @@ export class TimelineView {
     this.overlapIds.clear();
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     if (!d) return;
+    if (d.kind === "pending" && d.collapseTo) ui().select([d.collapseTo]);
     const store = useProject.getState();
     if (d.kind === "trim") store.endGesture(true);
     if (d.kind === "move") {
@@ -434,7 +466,7 @@ export class TimelineView {
     // Playhead head
     const px = this.xOf(u.playhead);
     if (px >= -8 && px <= this.width + 8) {
-      ctx.fillStyle = C.accent;
+      ctx.fillStyle = C.playhead;
       ctx.beginPath();
       ctx.moveTo(px - 6, RULER_H - 12);
       ctx.lineTo(px + 6, RULER_H - 12);
@@ -463,7 +495,7 @@ export class TimelineView {
       ctx.fillStyle = C.line;
       ctx.fillRect(0, lane.y + lane.h - 1, W, 1);
     });
-    ctx.fillStyle = "#0b0c0f";
+    ctx.fillStyle = C.divider;
     ctx.fillRect(0, dividerY, W, 8);
 
     // In/Out range tint
@@ -485,7 +517,7 @@ export class TimelineView {
         this.drawClip(ctx, c, lane, media.get(c.mediaId), sel.has(c.id), rt);
       }
       if (lane.track.locked) {
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillStyle = C.locked;
         ctx.fillRect(0, lane.y, W, lane.h - 1);
       }
     }
@@ -504,7 +536,7 @@ export class TimelineView {
         const target = lane && lane.track.kind === kind ? lane : lanes.find((l) => l.track.kind === kind);
         if (target) {
           const gx = this.xOf(this.snappedTime(x));
-          ctx.fillStyle = "rgba(245,165,36,0.18)";
+          ctx.fillStyle = C.ghost;
           ctx.strokeStyle = C.accent;
           ctx.lineWidth = 1.5;
           roundRect(ctx, gx, target.y + 3, total * u.pxPerSec, target.h - 7, 6);
@@ -531,7 +563,7 @@ export class TimelineView {
     if (u.tool === "blade" && this.hoverX != null && this.hover.clip && !this.drag) {
       const x = Math.round(this.hoverX) + 0.5;
       const lane = this.hover.lane!;
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = C.playhead;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, lane.y + 2);
@@ -542,8 +574,8 @@ export class TimelineView {
     // Playhead line
     const px = Math.round(this.xOf(u.playhead)) + 0.5;
     if (px >= 0 && px <= W) {
-      ctx.strokeStyle = C.accent;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = C.playhead;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(px, 0);
       ctx.lineTo(px, this.laneHeight);
@@ -570,7 +602,7 @@ export class TimelineView {
 
     ctx.save();
     if (dim) ctx.globalAlpha = 0.45;
-    roundRect(ctx, x, y, w, h, 5);
+    roundRect(ctx, x, y, w, h, 7);
     ctx.fillStyle = isVideo ? (selected ? C.videoSel : C.video) : selected ? C.audioSel : C.audio;
     ctx.fill();
     ctx.clip();
@@ -646,7 +678,7 @@ export class TimelineView {
         ctx.fillStyle = C.accent;
         roundRect(ctx, tx - 2, y + 2, bw, labelH - 4, 3);
         ctx.fill();
-        ctx.fillStyle = "#1c1303";
+        ctx.fillStyle = C.accentFg;
         ctx.fillText(badge, tx + 2, y + labelH / 2 + 0.5);
         tx += bw + 4;
         ctx.fillStyle = C.label;
@@ -662,18 +694,18 @@ export class TimelineView {
     const overlapping = this.overlapIds.has(c.id);
     if (selected || hovered || overlapping) {
       ctx.save();
-      roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 5);
-      ctx.strokeStyle = overlapping ? C.danger : selected ? C.accent : "rgba(255,255,255,0.5)";
+      roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 7);
+      ctx.strokeStyle = overlapping ? C.danger : selected ? C.select : "rgba(255,255,255,0.5)";
       ctx.lineWidth = selected || overlapping ? 2 : 1;
       ctx.stroke();
       ctx.restore();
     }
     // Trim handles
     if ((hovered || selected) && ui().tool === "select" && w > 16 && !lane.track.locked) {
-      ctx.fillStyle = hovered && this.hover.part === "start" ? C.accent : "rgba(255,255,255,0.7)";
+      ctx.fillStyle = hovered && this.hover.part === "start" ? C.select : "rgba(255,255,255,0.7)";
       roundRect(ctx, x + 2, y + h / 2 - 9, 3, 18, 1.5);
       ctx.fill();
-      ctx.fillStyle = hovered && this.hover.part === "end" ? C.accent : "rgba(255,255,255,0.7)";
+      ctx.fillStyle = hovered && this.hover.part === "end" ? C.select : "rgba(255,255,255,0.7)";
       roundRect(ctx, x + w - 5, y + h / 2 - 9, 3, 18, 1.5);
       ctx.fill();
     }

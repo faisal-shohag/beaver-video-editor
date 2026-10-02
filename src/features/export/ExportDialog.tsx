@@ -1,4 +1,6 @@
-import { Button, Dialog, Field, NumberInput, Segmented, Select } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { AppDialog, Field, NumberInput, Segmented, Select } from "@/components/editor";
 import { ipc } from "@/lib/ipc";
 import { formatBytes, shortDuration, uid } from "@/lib/time";
 import type { ExportSettings, Quality } from "@/lib/types";
@@ -10,7 +12,7 @@ import { videoDir, join } from "@tauri-apps/api/path";
 import { save } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { Copy, Cpu, FolderOpen, Gauge, Save, Sparkles, Trash2, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { startExport } from "./jobs";
 import {
   AUDIO_CODECS_FOR,
@@ -43,9 +45,9 @@ export function ExportDialog() {
   const open = useUi((s) => s.exportOpen);
   const close = () => useUi.getState().set({ exportOpen: false });
   return (
-    <Dialog open={open} onClose={close} title="Export" width={920}>
+    <AppDialog open={open} onClose={close} title="Export" width={920}>
       {open && <ExportForm onDone={close} />}
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -72,20 +74,27 @@ function ExportForm({ onDone }: { onDone: () => void }) {
     setS((prev) => normalise({ ...prev, ...p }));
   };
 
-  // Default output: Videos\<project>.<ext>
+  // Default output: Videos\<project>.<ext>. Follows the project name until the user picks their own path.
+  const pathEdited = useRef(false);
+  const lastName = useRef(project.name);
   useEffect(() => {
+    if (!open) return;
+    if (lastName.current !== project.name) {
+      lastName.current = project.name;
+      pathEdited.current = false;
+    }
+    if (pathEdited.current) return;
     let alive = true;
     (async () => {
       const dir = await videoDir().catch(() => "");
       const name = (project.name || "Untitled").replace(/[\\/:*?"<>|]/g, "_");
       const path = dir ? await join(dir, `${name}.${EXT_FOR[s.container]}`) : `${name}.${EXT_FOR[s.container]}`;
-      if (alive) setS((prev) => (prev.outputPath ? prev : { ...prev, outputPath: path }));
+      if (alive) setS((prev) => (prev.outputPath === path ? prev : { ...prev, outputPath: path }));
     })();
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [open, project.name, s.container]);
 
   // Keep the extension in sync with the container.
   useEffect(() => {
@@ -154,7 +163,10 @@ function ExportForm({ onDone }: { onDone: () => void }) {
       defaultPath: s.outputPath,
       filters: [{ name: s.container.toUpperCase(), extensions: [EXT_FOR[s.container]] }],
     });
-    if (path) setS((prev) => ({ ...prev, outputPath: path }));
+    if (path) {
+      pathEdited.current = true;
+      setS((prev) => ({ ...prev, outputPath: path }));
+    }
   };
 
   const go = async () => {
@@ -187,28 +199,31 @@ function ExportForm({ onDone }: { onDone: () => void }) {
         <div className="flex flex-col gap-0.5">
           {[...BUILTIN_PRESETS, ...userPresets].map((p) => (
             <div key={p.id} className="group relative">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => applyPreset(p)}
                 className={clsx(
-                  "w-full rounded-md px-2.5 py-1.5 text-left transition-colors",
-                  presetId === p.id ? "bg-accent/12 ring-1 ring-accent/50" : "hover:bg-panel-3",
+                  "h-auto w-full flex-col items-stretch gap-0 px-2.5 py-1.5 text-left font-normal whitespace-normal",
+                  presetId === p.id && "bg-primary/12 ring-1 ring-primary/50",
                 )}
               >
-                <div className={clsx("text-[13px]", presetId === p.id ? "text-accent" : "text-fg")}>{p.name}</div>
+                <div className={clsx("text-[13px]", presetId === p.id ? "text-primary" : "text-foreground")}>{p.name}</div>
                 <div className="text-[11px] text-faint">{p.description}</div>
-              </button>
+              </Button>
               {p.custom && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label={`Delete preset ${p.name}`}
                   onClick={() => {
                     const next = userPresets.filter((x) => x.id !== p.id);
                     setUserPresets(next);
                     saveUserPresets(next);
                   }}
-                  className="absolute top-2 right-2 hidden rounded p-1 text-faint group-hover:block hover:text-danger"
+                  className="absolute top-1.5 right-1.5 hidden text-faint group-hover:flex hover:text-destructive"
                 >
                   <Trash2 size={12} />
-                </button>
+                </Button>
               )}
             </div>
           ))}
@@ -220,13 +235,16 @@ function ExportForm({ onDone }: { onDone: () => void }) {
         <div className="flex flex-1 flex-col gap-5 p-5">
           <Field label="Save to">
             <div className="flex gap-2">
-              <input
+              <Input
                 aria-label="Output file"
                 value={s.outputPath}
-                onChange={(e) => setS((p) => ({ ...p, outputPath: e.target.value }))}
-                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-panel-2 px-2 font-mono text-xs outline-none focus:border-accent"
+                onChange={(e) => {
+                  pathEdited.current = true;
+                  setS((p) => ({ ...p, outputPath: e.target.value }));
+                }}
+                className="h-9 min-w-0 flex-1 rounded-[10px] bg-card font-mono text-xs"
               />
-              <Button onClick={browse}>
+              <Button variant="outline" onClick={browse}>
                 <FolderOpen size={14} /> Browse
               </Button>
             </div>
@@ -281,7 +299,7 @@ function ExportForm({ onDone }: { onDone: () => void }) {
                       hint={benchmarking ? "benchmarking…" : encoders ? "measured on this PC" : undefined}
                     >
                       {s.mode === "turbo" ? (
-                        <div className="flex h-8 items-center rounded-md border border-line bg-panel-2/50 px-2 text-muted">
+                        <div className="flex h-8 items-center rounded-md border border-line bg-panel-2/50 px-2 text-muted-foreground">
                           {effectiveEncoder}
                         </div>
                       ) : (
@@ -331,7 +349,7 @@ function ExportForm({ onDone }: { onDone: () => void }) {
                     <Field label="Width × height">
                       <div className="flex items-center gap-1">
                         <NumberInput label="Width" value={s.width} min={16} step={2} onChange={(v) => update({ width: Math.round(v) })} />
-                        <span className="text-muted">×</span>
+                        <span className="text-muted-foreground">×</span>
                         <NumberInput label="Height" value={s.height} min={16} step={2} onChange={(v) => update({ height: Math.round(v) })} />
                       </div>
                     </Field>
@@ -442,7 +460,7 @@ function ExportForm({ onDone }: { onDone: () => void }) {
           </Field>
         </div>
 
-        <div className="flex items-center gap-4 border-t border-line bg-panel-2/40 px-5 py-3 text-xs text-muted">
+        <div className="flex items-center gap-4 border-t border-line bg-panel-2/40 px-5 py-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Gauge size={13} /> {shortDuration(duration, true)}
           </span>
@@ -465,21 +483,21 @@ function ExportForm({ onDone }: { onDone: () => void }) {
                   savePreset();
                 }}
               >
-                <input
+                <Input
                   autoFocus
                   aria-label="Preset name"
                   placeholder="Preset name"
                   value={presetName}
                   onChange={(e) => setPresetName(e.target.value)}
                   onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setPresetName(null))}
-                  className="h-8 w-40 rounded-md border border-line bg-panel-2 px-2 text-xs text-fg outline-none focus:border-accent"
+                  className="h-8 w-40 text-xs"
                 />
-                <Button type="submit" disabled={!presetName.trim()}>
+                <Button variant="outline" type="submit" disabled={!presetName.trim()}>
                   Save
                 </Button>
               </form>
             )}
-            <Button variant="primary" onClick={go} disabled={total <= 0} className="px-5">
+            <Button onClick={go} disabled={total <= 0} className="px-5">
               Export
             </Button>
           </div>
@@ -505,22 +523,23 @@ function ModeCard({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
+      variant="outline"
       role="radio"
       aria-checked={active}
       disabled={disabled}
       onClick={onClick}
       title={text}
       className={clsx(
-        "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors disabled:opacity-40",
-        active ? "border-accent bg-accent/8" : "border-line bg-panel-2 hover:border-line-strong",
+        "h-auto flex-col items-start gap-1 p-3 text-left font-normal whitespace-normal",
+        active && "border-primary bg-primary/8",
       )}
     >
-      <span className={clsx("flex items-center gap-1.5 text-[13px] font-semibold", active ? "text-accent" : "text-fg")}>
+      <span className={clsx("flex items-center gap-1.5 text-[13px] font-semibold", active ? "text-primary" : "text-foreground")}>
         {icon}
         {title}
       </span>
-      <span className="line-clamp-2 text-[11px] leading-snug text-muted">{text}</span>
-    </button>
+      <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{text}</span>
+    </Button>
   );
 }

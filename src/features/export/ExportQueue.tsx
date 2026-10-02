@@ -1,10 +1,13 @@
-import { IconButton } from "@/components/ui";
+import { IconButton } from "@/components/editor";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 import { ipc } from "@/lib/ipc";
 import { formatBytes, shortDuration } from "@/lib/time";
 import { useRuntime, type ExportJob } from "@/store/runtime";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import clsx from "clsx";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleX, FolderOpen, Loader2, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, CircleX, FolderOpen, X } from "lucide-react";
 import { useState } from "react";
 import { clearFinished } from "./jobs";
 
@@ -52,16 +55,16 @@ function JobRow({ job }: { job: ExportJob }) {
   return (
     <div className="border-b border-line px-3 py-2.5 last:border-b-0">
       <div className="flex items-center gap-2">
-        {job.status === "running" && <Loader2 size={14} className="spin shrink-0 text-accent" />}
+        {job.status === "running" && <Spinner className="size-3.5 shrink-0 text-primary" />}
         {job.status === "done" && <CheckCircle2 size={14} className="shrink-0 text-ok" />}
-        {(job.status === "error" || job.status === "cancelled") && <CircleX size={14} className="shrink-0 text-danger" />}
+        {(job.status === "error" || job.status === "cancelled") && <CircleX size={14} className="shrink-0 text-destructive" />}
         <span className="min-w-0 flex-1 truncate text-[13px]" title={job.output}>
           {job.label}
         </span>
         {job.status === "running" ? (
-          <button onClick={() => ipc.cancelExport(job.id)} className="rounded px-1.5 text-[11px] text-muted hover:bg-danger/15 hover:text-danger">
+          <Button variant="ghost" size="xs" onClick={() => ipc.cancelExport(job.id)} className="text-muted-foreground hover:text-destructive">
             Cancel
-          </button>
+          </Button>
         ) : job.status === "done" && (job.kind ?? "export") === "export" ? (
           <IconButton label="Show in folder" onClick={() => revealItemInDir(job.output)}>
             <FolderOpen size={13} />
@@ -70,10 +73,8 @@ function JobRow({ job }: { job: ExportJob }) {
       </div>
       {job.status === "running" && (
         <>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-accent transition-[width] duration-150" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="mt-1 flex justify-between font-mono text-[10px] text-muted">
+          <Progress value={pct} className="mt-2 h-1.5" />
+          <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
             <span>
               {job.stage} · {pct}%
             </span>
@@ -85,19 +86,19 @@ function JobRow({ job }: { job: ExportJob }) {
         </>
       )}
       {job.status === "done" && (job.kind ?? "export") !== "export" && (
-        <div className="mt-1 font-mono text-[10px] text-muted">
+        <div className="mt-1 font-mono text-[10px] text-muted-foreground">
           {job.kind === "download" ? "Downloaded" : "Enhanced"} in {shortDuration(job.elapsedSecs ?? 0, true)}
         </div>
       )}
       {job.status === "done" && (job.kind ?? "export") === "export" && (
-        <div className="mt-1 font-mono text-[10px] text-muted">
+        <div className="mt-1 font-mono text-[10px] text-muted-foreground">
           {shortDuration(job.elapsedSecs ?? 0, true)}
           {realtime > 0 && <span className={clsx(realtime >= 1 && "text-ok")}> · {realtime.toFixed(1)}× realtime</span>} ·{" "}
           {formatBytes(job.sizeBytes ?? 0)} · {job.encoder}
         </div>
       )}
       {job.status === "error" && (
-        <pre className="mt-1 max-h-24 overflow-auto font-mono text-[10px] whitespace-pre-wrap text-danger/90 select-text">{job.error}</pre>
+        <pre className="mt-1 max-h-24 overflow-auto font-mono text-[10px] whitespace-pre-wrap text-destructive/90 select-text">{job.error}</pre>
       )}
     </div>
   );

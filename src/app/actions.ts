@@ -32,10 +32,9 @@ export function splitAtPlayhead(allTracks = false) {
   const under = ops.clipsAt(p, t);
   const targets = !allTracks && sel.length ? under.filter((c) => sel.includes(c.id)) : under;
   if (!targets.length) return ui().notify("Nothing under the playhead to split");
-  edit((d) => {
-    const created = ops.splitClips(d, targets.map((c) => c.id), t);
-    if (sel.length) ui().select([...sel, ...created]);
-  });
+  edit((d) => void ops.splitClips(d, targets.map((c) => c.id), t));
+  // Neither half stays selected: the user picks the one they want next.
+  if (sel.length) ui().select([]);
 }
 
 export function splitClipAt(clipId: string, t: number) {

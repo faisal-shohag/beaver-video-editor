@@ -1,11 +1,14 @@
-import { Button, Segmented } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
+import { Segmented } from "@/components/editor";
 import { ipc } from "@/lib/ipc";
 import { formatBytes, shortDuration } from "@/lib/time";
 import type { Clip, EnhanceModelId, EnhanceStrength, Project } from "@/lib/types";
 import { useRuntime } from "@/store/runtime";
 import { useUi } from "@/store/ui";
 import clsx from "clsx";
-import { CheckCircle2, Download, Ear, Loader2, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Download, Ear, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MODELS, enhanceClips, estimateSecs, modelInfo, refreshModels, removeEnhance } from "./enhance";
 
@@ -47,7 +50,7 @@ export function EnhancePanel({ clips, project }: { clips: Clip[]; project: Proje
     <div className="flex flex-col gap-3 rounded-lg border border-line bg-panel-2/60 p-2.5">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-[13px] font-semibold">
-          <Sparkles size={14} className="text-accent" /> Enhance voice
+          <Sparkles size={14} className="text-primary" /> Enhance voice
         </span>
         {anyEnhanced && clips.every((c) => c.enhance?.path) && (
           <span className="flex items-center gap-1 text-[11px] text-ok">
@@ -60,27 +63,28 @@ export function EnhancePanel({ clips, project }: { clips: Clip[]; project: Proje
         {MODELS.map((m) => {
           const st = statuses.find((s) => s.id === m.id);
           return (
-            <button
+            <Button
               key={m.id}
+              variant="outline"
               role="radio"
               aria-checked={model === m.id}
               onClick={() => setModel(m.id)}
               className={clsx(
-                "rounded-md border px-2.5 py-2 text-left transition-colors",
-                model === m.id ? "border-accent bg-accent/8" : "border-line hover:border-line-strong",
+                "h-auto flex-col items-stretch gap-0 px-2.5 py-2 text-left font-normal whitespace-normal",
+                model === m.id && "border-primary bg-primary/8",
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span className={clsx("text-[13px] font-medium", model === m.id && "text-accent")}>{m.name}</span>
+                <span className={clsx("text-[13px] font-medium", model === m.id && "text-primary")}>{m.name}</span>
                 <span className="text-[10px] text-faint">{m.tagline}</span>
               </div>
-              <div className="mt-0.5 text-[11px] leading-snug text-muted">{m.fixes}</div>
+              <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{m.fixes}</div>
               {st && !st.installed && (
-                <div className="mt-1 flex items-center gap-1 text-[10px] text-accent">
+                <div className="mt-1 flex items-center gap-1 text-[10px] text-primary">
                   <Download size={10} /> Downloads {formatBytes(st.downloadBytes)} on first use
                 </div>
               )}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -101,23 +105,21 @@ export function EnhancePanel({ clips, project }: { clips: Clip[]; project: Proje
         <div className="flex flex-col gap-1.5">
           {running.map((j) => (
             <div key={j.id}>
-              <div className="flex items-center justify-between text-[11px] text-muted">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="flex min-w-0 items-center gap-1 truncate">
-                  <Loader2 size={11} className="spin shrink-0 text-accent" /> {j.stage}
+                  <Spinner className="size-3 shrink-0 text-primary" /> {j.stage}
                 </span>
-                <button onClick={() => ipc.cancelJob(j.id)} className="rounded px-1 hover:text-danger" aria-label="Cancel">
+                <Button variant="ghost" size="icon-xs" onClick={() => ipc.cancelJob(j.id)} aria-label="Cancel" className="size-5 hover:text-destructive">
                   <X size={12} />
-                </button>
+                </Button>
               </div>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-line">
-                <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.round(j.progress * 100)}%` }} />
-              </div>
+              <Progress value={Math.round(j.progress * 100)} className="mt-1" />
             </div>
           ))}
         </div>
       ) : (
         <>
-          <Button variant={applied ? "default" : "primary"} disabled={applied} onClick={() => enhanceClips(clips.map((c) => c.id), model, strength)}>
+          <Button variant={applied ? "outline" : "default"} disabled={applied} onClick={() => enhanceClips(clips.map((c) => c.id), model, strength)}>
             <Sparkles size={13} />
             {applied ? "Enhanced" : needsDownload ? "Download & enhance" : "Enhance"}
           </Button>
@@ -148,8 +150,9 @@ function HearOriginalButton() {
   const release = () => set({ hearOriginal: false });
   return (
     <Button
+      variant="outline"
       size="sm"
-      className={clsx("flex-1", holding && "border-accent text-accent")}
+      className={clsx("flex-1", holding && "border-primary text-primary")}
       onPointerDown={() => set({ hearOriginal: true })}
       onPointerUp={release}
       onPointerLeave={release}
