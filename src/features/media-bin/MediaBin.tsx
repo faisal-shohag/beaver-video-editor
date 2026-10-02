@@ -1,5 +1,7 @@
 import { appendSelectedMedia, importDialog } from "@/app/actions";
-import { Button, IconButton } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { IconButton, PanelHeader } from "@/components/editor";
 import { timelineDrop } from "@/features/timeline/Timeline";
 import { formatBytes, shortDuration } from "@/lib/time";
 import type { MediaItem } from "@/lib/types";
@@ -7,7 +9,7 @@ import { useProject } from "@/store/project";
 import { useRuntime } from "@/store/runtime";
 import { ui, useUi } from "@/store/ui";
 import clsx from "clsx";
-import { AudioLines, FolderInput, ListPlus, Loader2, Trash2, Zap } from "lucide-react";
+import { AudioLines, Film, FolderInput, ListPlus, Trash2, Zap } from "lucide-react";
 
 export function MediaBin() {
   const media = useProject((s) => s.project.media);
@@ -15,31 +17,34 @@ export function MediaBin() {
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-panel" aria-label="Media">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-3">
-        <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Media</h2>
-        <div className="flex items-center gap-0.5">
-          <IconButton
-            label="Append selected to timeline (joins back to back)"
-            disabled={!selected.length}
-            onClick={appendSelectedMedia}
-          >
-            <ListPlus size={15} />
-          </IconButton>
-          <IconButton label="Import media (Ctrl+I)" onClick={() => importDialog(false)}>
-            <FolderInput size={15} />
-          </IconButton>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <PanelHeader
+        icon={<Film size={14} />}
+        title="Media"
+        actions={
+          <>
+            <IconButton
+              label="Append selected to timeline (joins back to back)"
+              disabled={!selected.length}
+              onClick={appendSelectedMedia}
+            >
+              <ListPlus size={15} />
+            </IconButton>
+            <IconButton label="Import media (Ctrl+I)" onClick={() => importDialog(false)}>
+              <FolderInput size={15} />
+            </IconButton>
+          </>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         {media.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-            <p className="text-xs leading-relaxed text-muted">Import video and audio files, or drag them in from Explorer.</p>
-            <Button variant="primary" onClick={() => importDialog(true)}>
+            <p className="text-xs leading-relaxed text-muted-foreground">Import video and audio files, or drag them in from Explorer.</p>
+            <Button onClick={() => importDialog(true)}>
               <FolderInput size={14} /> Import files
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-3 gap-y-3">
             {media.map((m) => (
               <MediaCard key={m.id} media={m} selected={selected.includes(m.id)} />
             ))}
@@ -47,7 +52,7 @@ export function MediaBin() {
         )}
       </div>
       {media.length > 0 && (
-        <p className="shrink-0 border-t border-line px-3 py-2 text-[11px] leading-snug text-faint">
+        <p className="shrink-0 px-4 pb-3 text-[11px] leading-snug text-faint">
           Drag onto the timeline, or double-click to append to the end.
         </p>
       )}
@@ -102,13 +107,15 @@ function MediaCard({ media, selected }: { media: MediaItem; selected: boolean })
         ui().set({ selectedMedia: [media.id] });
         appendSelectedMedia();
       }}
-      className={clsx(
-        "group relative overflow-hidden rounded-lg border bg-panel-2 transition-colors",
-        selected ? "border-accent" : "border-line hover:border-line-strong",
-      )}
+      className="group relative"
       title={`${media.name}\n${media.hasVideo ? `${media.width}×${media.height} · ${media.fps.toFixed(2)} fps · ${media.vcodec}` : media.acodec}\n${formatBytes(media.sizeBytes)}`}
     >
-      <div className="relative aspect-video bg-black">
+      <div
+        className={clsx(
+          "relative aspect-video overflow-hidden rounded-[10px] bg-black ring-2 transition-shadow",
+          selected ? "ring-primary" : "ring-transparent group-hover:ring-line-strong",
+        )}
+      >
         {media.hasVideo && tile ? (
           <div
             className="absolute inset-0 bg-cover"
@@ -120,15 +127,15 @@ function MediaCard({ media, selected }: { media: MediaItem; selected: boolean })
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-audio">
-            {media.hasVideo ? <Loader2 size={18} className="spin text-faint" /> : <AudioLines size={26} />}
+            {media.hasVideo ? <Spinner className="size-[18px] text-faint" /> : <AudioLines size={26} />}
           </div>
         )}
         <span className="absolute right-1 bottom-1 rounded bg-black/70 px-1 font-mono text-[10px] text-white">
           {shortDuration(media.duration)}
         </span>
         {proxy === "pending" && (
-          <span className="absolute top-1 left-1 flex items-center gap-1 rounded bg-black/70 px-1 text-[10px] text-accent" title="Building a light preview copy for smooth playback">
-            <Loader2 size={9} className="spin" /> proxy
+          <span className="absolute top-1 left-1 flex items-center gap-1 rounded bg-black/70 px-1 text-[10px] text-warn" title="Building a light preview copy for smooth playback">
+            <Spinner className="size-2.5" /> proxy
           </span>
         )}
         {proxy === "ready" && (
@@ -137,19 +144,21 @@ function MediaCard({ media, selected }: { media: MediaItem; selected: boolean })
           </span>
         )}
         {!used && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             aria-label="Remove from project"
             title="Remove from project"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => patch((d) => void (d.media = d.media.filter((x) => x.id !== media.id)))}
-            className="absolute top-1 right-1 hidden h-5 w-5 items-center justify-center rounded bg-black/70 text-muted group-hover:flex hover:text-danger"
+            className="absolute top-1 right-1 hidden size-5 bg-black/70 text-white/80 group-hover:flex hover:bg-black/80 hover:text-destructive"
           >
             <Trash2 size={11} />
-          </button>
+          </Button>
         )}
       </div>
-      <div className="flex items-center gap-1 px-1.5 py-1">
-        <span className="truncate text-[11px] text-fg/90">{media.name}</span>
+      <div className="flex items-center gap-1 px-0.5 pt-1.5">
+        <span className="truncate text-[11px] text-muted-foreground">{media.name}</span>
       </div>
     </div>
   );

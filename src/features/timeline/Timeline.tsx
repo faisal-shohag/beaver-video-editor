@@ -8,7 +8,25 @@ import {
   zoomBy,
   zoomToFit,
 } from "@/app/actions";
-import { IconButton, Kbd, Slider } from "@/components/ui";
+import { IconButton, Slider } from "@/components/editor";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Kbd } from "@/components/ui/kbd";
+import { Separator } from "@/components/ui/separator";
 import type { Track } from "@/lib/types";
 import * as ops from "@/store/ops";
 import { useProject } from "@/store/project";
@@ -90,18 +108,18 @@ export function Timeline() {
       <Toolbar />
       <div
         ref={areaRef}
-        className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line"
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
         onWheel={onWheel}
       >
         <div className="flex shrink-0" style={{ height: RULER_H }}>
-          <div className="flex shrink-0 items-center gap-1 border-r border-b border-line px-2" style={{ width: HEADER_W }}>
+          <div className="flex shrink-0 items-center gap-1 px-2" style={{ width: HEADER_W }}>
             <AddTrackButton kind="video" />
             <AddTrackButton kind="audio" />
           </div>
           <canvas ref={rulerRef} className="block" />
         </div>
         <div data-scroll className="flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="relative shrink-0 border-r border-line bg-panel" style={{ width: HEADER_W, height: layout.height }}>
+          <div className="relative shrink-0 bg-panel" style={{ width: HEADER_W, height: layout.height }}>
             {layout.lanes.map((l) => (
               <TrackHeader key={l.track.id} track={l.track} top={l.y} height={l.h} />
             ))}
@@ -110,7 +128,7 @@ export function Timeline() {
         </div>
         <HScrollbar />
       </div>
-      {menu && <ClipMenu req={menu} onClose={() => setMenu(null)} />}
+      {menu && <ClipMenu key={`${menu.x}:${menu.y}`} req={menu} onClose={() => setMenu(null)} />}
     </section>
   );
 }
@@ -118,14 +136,16 @@ export function Timeline() {
 function AddTrackButton({ kind }: { kind: "video" | "audio" }) {
   const edit = useProject((s) => s.edit);
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="xs"
       onClick={() => edit((d) => void ops.addTrack(d, kind))}
       title={`Add ${kind} track`}
-      className="flex h-5 items-center gap-0.5 rounded px-1 text-[11px] text-muted hover:bg-panel-3 hover:text-fg"
+      className="h-6 gap-0.5 px-1.5 text-[11px] text-muted-foreground"
     >
       <Plus size={11} />
       {kind === "video" ? <Film size={11} /> : <Music size={11} />}
-    </button>
+    </Button>
   );
 }
 
@@ -140,17 +160,13 @@ function TrackHeader({ track, top, height }: { track: Track; top: number; height
   const isVideo = track.kind === "video";
   return (
     <div
-      className="group absolute flex items-center gap-1 border-b border-line pr-1 pl-2"
+      className="group absolute flex items-center gap-0.5 pr-1 pl-2"
       style={{ top, height, width: HEADER_W - 1 }}
     >
-      <div
-        className={clsx(
-          "mr-auto flex h-6 min-w-8 items-center justify-center rounded px-1.5 text-[11px] font-semibold",
-          isVideo ? "bg-video/20 text-[#9fb2ff]" : "bg-audio/20 text-[#7ee0bb]",
-        )}
-      >
+      <Badge variant="secondary" className="mr-auto h-6 min-w-9 justify-center gap-1.5 rounded-lg px-2 font-mono text-[11px] font-semibold">
+        <span className={clsx("size-1.5 rounded-full", isVideo ? "bg-video" : "bg-audio")} />
         {track.name}
-      </div>
+      </Badge>
       {isVideo && (
         <IconButton label={track.hidden ? "Show track" : "Hide track"} active={track.hidden} onClick={() => toggle("hidden")}>
           {track.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -163,14 +179,16 @@ function TrackHeader({ track, top, height }: { track: Track; top: number; height
         {track.locked ? <Lock size={13} /> : <LockOpen size={13} />}
       </IconButton>
       {canRemove && (
-        <button
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Remove track"
           aria-label="Remove track"
           onClick={() => edit((d) => ops.removeTrack(d, track.id))}
-          className="absolute top-0.5 right-0.5 hidden h-3.5 w-3.5 items-center justify-center rounded text-faint group-hover:flex hover:bg-danger/20 hover:text-danger"
+          className="absolute top-0.5 right-0.5 hidden size-4 rounded text-faint group-hover:flex hover:text-destructive"
         >
           <X size={10} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -189,29 +207,31 @@ function Toolbar() {
   const zoomLog = Math.log2(pxPerSec);
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 px-2">
+    <div className="flex h-12 shrink-0 items-center gap-1 border-b bg-toolbar px-3">
       <IconButton label="Select tool (V)" active={tool === "select"} onClick={() => set({ tool: "select" })}>
         <MousePointer2 size={15} />
       </IconButton>
       <IconButton label="Blade tool — click a clip to split (B)" active={tool === "blade"} onClick={() => set({ tool: "blade" })}>
         <ScissorsLineDashed size={15} />
       </IconButton>
-      <div className="mx-1.5 h-5 w-px bg-line" />
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       <IconButton label="Split at playhead (S)" onClick={() => splitAtPlayhead()}>
         <Scissors size={15} />
       </IconButton>
       <IconButton label="Delete selection (Del)" disabled={!selection.length && !hasRange} onClick={() => deleteSelection()}>
         <Trash2 size={15} />
       </IconButton>
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => deleteInOut(true)}
         disabled={!hasRange}
         title="Cut out the In→Out range on all tracks and close the gap (Shift+Del)"
-        className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-muted hover:bg-panel-3 hover:text-fg disabled:opacity-35"
+        className="h-8 rounded-[10px] text-xs text-muted-foreground"
       >
         <Scissors size={13} /> Cut range
-      </button>
-      <div className="mx-1.5 h-5 w-px bg-line" />
+      </Button>
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       <IconButton label="Snapping (N)" active={snap} onClick={() => set({ snap: !snap })}>
         <Magnet size={15} />
       </IconButton>
@@ -219,14 +239,14 @@ function Toolbar() {
         <WrapText size={15} />
       </IconButton>
       {(inPoint != null || outPoint != null) && (
-        <div className="ml-2 flex items-center gap-1 rounded-md bg-accent/10 py-0.5 pr-0.5 pl-2 font-mono text-[11px] text-accent">
+        <Badge variant="secondary" className="ml-2 h-7 gap-1 pr-0.5 pl-2 font-mono text-[11px] text-warn">
           In/Out set
-          <IconButton label="Clear In/Out (Alt+X)" onClick={() => set({ inPoint: null, outPoint: null })} className="h-5 min-w-5">
+          <IconButton label="Clear In/Out (Alt+X)" onClick={() => set({ inPoint: null, outPoint: null })} className="size-5 min-w-5">
             <X size={12} />
           </IconButton>
-        </div>
+        </Badge>
       )}
-      <div className="ml-auto flex items-center gap-2 text-muted">
+      <div className="ml-auto flex items-center gap-2 text-muted-foreground">
         <span className="hidden text-[11px] text-faint xl:inline">
           <Kbd>Ctrl</Kbd>+wheel zoom · <Kbd>Shift</Kbd>+wheel scroll
         </span>
@@ -278,11 +298,11 @@ function HScrollbar() {
   };
 
   return (
-    <div className="flex h-3 shrink-0 border-t border-line bg-panel" style={{ paddingLeft: HEADER_W }}>
+    <div className="flex h-3 shrink-0 bg-panel" style={{ paddingLeft: HEADER_W }}>
       <div ref={trackRef} className="relative flex-1">
         <div
           onPointerDown={onDown}
-          className="absolute top-0.5 h-2 rounded-full bg-line-strong hover:bg-muted"
+          className="absolute top-0.5 h-2 rounded-full bg-line-strong hover:bg-muted-foreground"
           style={{ left: thumbX, width: Math.min(thumbW, width) }}
         />
       </div>
@@ -290,6 +310,9 @@ function HScrollbar() {
   );
 }
 
+const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4, 8, 16];
+
+/** Clip/empty-area context menu, anchored at the pointer position the canvas reported. */
 function ClipMenu({ req, onClose }: { req: ContextMenuRequest; onClose: () => void }) {
   const project = useProject((s) => s.project);
   const edit = useProject((s) => s.edit);
@@ -297,88 +320,77 @@ function ClipMenu({ req, onClose }: { req: ContextMenuRequest; onClose: () => vo
   const media = clip && project.media.find((m) => m.id === clip.mediaId);
   const track = clip && project.tracks.find((t) => t.id === clip.trackId);
   const selection = useUi((s) => s.selection);
-
-  useEffect(() => {
-    const close = () => onClose();
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("blur", close);
-    return () => {
-      window.removeEventListener("pointerdown", close);
-      window.removeEventListener("blur", close);
-    };
-  }, [onClose]);
-
-  const item = (label: string, action: () => void, opts: { disabled?: boolean; hint?: string; danger?: boolean } = {}) => (
-    <button
-      key={label}
-      disabled={opts.disabled}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={() => {
-        action();
-        onClose();
-      }}
-      className={clsx(
-        "flex w-full items-center justify-between gap-6 rounded px-2.5 py-1.5 text-left text-[13px] hover:bg-panel-3 disabled:opacity-35",
-        opts.danger && "text-danger",
-      )}
-    >
-      {label}
-      {opts.hint && <span className="text-[11px] text-faint">{opts.hint}</span>}
-    </button>
-  );
-
-  const x = Math.min(req.x, window.innerWidth - 230);
-  const y = Math.min(req.y, window.innerHeight - 330);
   const ids = selection.length ? selection : clip ? [clip.id] : [];
+  const currentSpeed = clip ? SPEEDS.find((s) => Math.abs(clip.speed - s) < 1e-6) : undefined;
 
   return (
-    <div
-      className="fixed z-50 w-56 rounded-lg border border-line bg-panel-2 p-1 shadow-2xl"
-      style={{ left: x, top: y }}
-      onPointerDown={(e) => e.stopPropagation()}
-      role="menu"
-    >
-      {clip ? (
-        <>
-          {item("Split here", () => splitClipAt(clip.id, req.time), { hint: "B" })}
-          {item("Split at playhead", () => splitAtPlayhead(), { hint: "S" })}
-          <div className="my-1 h-px bg-line" />
-          <div className="px-2.5 pt-1 pb-0.5 text-[11px] text-faint">Speed</div>
-          <div className="grid grid-cols-4 gap-1 px-1.5 pb-1">
-            {[0.25, 0.5, 1, 1.5, 2, 4, 8, 16].map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setSpeed(ids, s);
-                  onClose();
-                }}
-                className={clsx(
-                  "rounded py-1 text-xs hover:bg-panel-3",
-                  Math.abs(clip.speed - s) < 1e-6 ? "bg-accent/15 text-accent" : "text-fg/90",
-                )}
-              >
-                {s}×
-              </button>
-            ))}
-          </div>
-          <div className="my-1 h-px bg-line" />
-          {track?.kind === "video" &&
-            media?.hasAudio &&
-            item("Detach audio", () => detachAudio(clip.id), { disabled: clip.audioDetached })}
-          {item("Reset transform", () =>
-            edit((d) => ops.updateClips(d, ids, { x: 0, y: 0, scale: 1, opacity: 1 })),
-          )}
-          <div className="my-1 h-px bg-line" />
-          {item("Delete", () => deleteSelection(false), { hint: "Del", danger: true })}
-          {item("Ripple delete", () => deleteSelection(true), { hint: "Shift+Del", danger: true })}
-        </>
-      ) : (
-        <>
-          {item("Split all tracks at playhead", () => splitAtPlayhead(true), { hint: "Shift+S" })}
-          {item("Set In here", () => ui().set({ inPoint: req.time }), { hint: "I" })}
-          {item("Set Out here", () => ui().set({ outPoint: req.time }), { hint: "O" })}
-        </>
-      )}
-    </div>
+    <DropdownMenu open modal={false} onOpenChange={(open) => !open && onClose()}>
+      <DropdownMenuTrigger asChild>
+        <span aria-hidden className="pointer-events-none fixed size-0" style={{ left: req.x, top: req.y }} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side="bottom"
+        sideOffset={0}
+        className="w-56"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        {clip ? (
+          <>
+            <DropdownMenuItem onSelect={() => splitClipAt(clip.id, req.time)}>
+              Split here <DropdownMenuShortcut>B</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => splitAtPlayhead()}>
+              Split at playhead <DropdownMenuShortcut>S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Speed</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup
+                  value={currentSpeed === undefined ? "" : String(currentSpeed)}
+                  onValueChange={(v) => setSpeed(ids, Number(v))}
+                >
+                  {SPEEDS.map((s) => (
+                    <DropdownMenuRadioItem key={s} value={String(s)}>
+                      {s}×
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            {track?.kind === "video" && media?.hasAudio && (
+              <DropdownMenuItem disabled={clip.audioDetached} onSelect={() => detachAudio(clip.id)}>
+                Detach audio
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => edit((d) => ops.updateClips(d, ids, { x: 0, y: 0, scale: 1, opacity: 1 }))}>
+              Reset transform
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => deleteSelection(false)}>
+              Delete <DropdownMenuShortcut>Del</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => deleteSelection(true)}>
+              Ripple delete <DropdownMenuShortcut>Shift+Del</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuLabel className="sr-only">Timeline</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => splitAtPlayhead(true)}>
+              Split all tracks at playhead <DropdownMenuShortcut>Shift+S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => ui().set({ inPoint: req.time })}>
+              Set In here <DropdownMenuShortcut>I</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => ui().set({ outPoint: req.time })}>
+              Set Out here <DropdownMenuShortcut>O</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

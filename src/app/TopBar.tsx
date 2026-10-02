@@ -1,24 +1,29 @@
-import { Button, IconButton } from "@/components/ui";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { IconButton } from "@/components/editor";
 import { ipc } from "@/lib/ipc";
 import { useProject } from "@/store/project";
 import { useRuntime } from "@/store/runtime";
+import { nextThemePref, useTheme, type ThemePref } from "@/lib/theme";
 import { useUi } from "@/store/ui";
-import { FilePlus, FolderOpen, Gauge, Loader2, Merge, Redo2, Save, Undo2, Upload, Zap } from "lucide-react";
+import { useRef, useState } from "react";
+import { FilePlus, FolderOpen, Gauge, Merge, Monitor, Moon, Redo2, Save, Sun, Undo2, Upload, Zap } from "lucide-react";
 import { importDialog, newProject, openProject, redo, saveProject, undo } from "./actions";
 import { CODEC_LABEL } from "@/features/export/presets";
 
 export function TopBar() {
-  const name = useProject((s) => s.project.name);
-  const dirty = useProject((s) => s.dirty);
   const canUndo = useProject((s) => s.past.length > 0);
   const canRedo = useProject((s) => s.future.length > 0);
   const hasClips = useProject((s) => s.project.clips.length > 0);
   const set = useUi((s) => s.set);
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-1 border-b border-line bg-panel px-2">
+    <header className="mb-2 flex h-11 shrink-0 items-center gap-1">
       <div className="mr-2 flex items-center gap-2 pl-1">
-        <img src="/beaver.svg" alt="" className="h-6 w-6" />
+        <img src="/logo.png" alt="" className="h-7 w-7" draggable={false} />
         <span className="text-sm font-semibold tracking-tight">Beaver</span>
       </div>
       <IconButton label="New project (Ctrl+N)" onClick={() => newProject()}>
@@ -30,14 +35,14 @@ export function TopBar() {
       <IconButton label="Save project (Ctrl+S)" onClick={() => saveProject(false)}>
         <Save size={16} />
       </IconButton>
-      <div className="mx-1.5 h-5 w-px bg-line" />
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       <IconButton label="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}>
         <Undo2 size={16} />
       </IconButton>
       <IconButton label="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}>
         <Redo2 size={16} />
       </IconButton>
-      <div className="mx-1.5 h-5 w-px bg-line" />
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       <Button variant="ghost" size="sm" onClick={() => importDialog(false)} title="Import media (Ctrl+I)">
         <Upload size={14} /> Import
       </Button>
@@ -45,16 +50,88 @@ export function TopBar() {
         <Merge size={14} /> Quick Join
       </Button>
 
-      <div className="mx-auto flex min-w-0 items-center gap-1.5 text-[13px]">
-        <span className="truncate text-fg/90">{name || "Untitled"}</span>
-        {dirty && <span className="h-1.5 w-1.5 rounded-full bg-accent" title="Unsaved changes" />}
-      </div>
+      <ProjectName />
 
       <EncoderChip />
-      <Button variant="primary" onClick={() => set({ exportOpen: true })} disabled={!hasClips} title="Export (Ctrl+E)" className="ml-2 px-4">
+      <ThemeToggle />
+      <Button onClick={() => set({ exportOpen: true })} disabled={!hasClips} title="Export (Ctrl+E)" className="ml-1 px-4">
         <Zap size={14} fill="currentColor" /> Export
       </Button>
     </header>
+  );
+}
+
+const THEME_ICON: Record<ThemePref, typeof Sun> = { system: Monitor, light: Sun, dark: Moon };
+const THEME_LABEL: Record<ThemePref, string> = { system: "System", light: "Light", dark: "Dark" };
+
+function ThemeToggle() {
+  const pref = useTheme((s) => s.pref);
+  const setPref = useTheme((s) => s.setPref);
+  const Icon = THEME_ICON[pref];
+  return (
+    <IconButton
+      label={`Theme: ${THEME_LABEL[pref]} (click for ${THEME_LABEL[nextThemePref(pref)]})`}
+      onClick={() => setPref(nextThemePref(pref))}
+    >
+      <Icon size={15} />
+    </IconButton>
+  );
+}
+
+/** Project title in the centre of the bar; click to rename (exports and Save As default to this name). */
+function ProjectName() {
+  const name = useProject((s) => s.project.name);
+  const dirty = useProject((s) => s.dirty);
+  const patch = useProject((s) => s.patch);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const cancelled = useRef(false);
+
+  const commit = () => {
+    setEditing(false);
+    if (cancelled.current) return;
+    const next = draft.trim().replace(/[\\/:*?"<>|]/g, "_");
+    if (next !== (name ?? "")) patch((d) => void (d.name = next));
+  };
+
+  return (
+    <div className="mx-auto flex min-w-0 items-center gap-1.5 text-[13px]">
+      {editing ? (
+        <Input
+          autoFocus
+          aria-label="Project name"
+          placeholder="Untitled"
+          value={draft}
+          maxLength={80}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            else if (e.key === "Escape") {
+              cancelled.current = true;
+              e.currentTarget.blur();
+            }
+          }}
+          className="h-8 w-60 rounded-[10px] bg-card text-center text-[13px]"
+        />
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Click to rename the project"
+          onClick={() => {
+            cancelled.current = false;
+            setDraft(name ?? "");
+            setEditing(true);
+          }}
+          className="h-8 max-w-72 min-w-0 rounded-[10px] px-3 text-[13px] font-normal text-foreground/90"
+        >
+          <span className="truncate">{name || "Untitled"}</span>
+          {dirty && <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved changes" />}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -71,9 +148,9 @@ function EncoderChip() {
   };
   if (busy) {
     return (
-      <span className="flex items-center gap-1.5 rounded-md bg-panel-3 px-2 py-1 text-[11px] text-muted" title="Measuring which encoders are fastest on this PC (runs once)">
-        <Loader2 size={12} className="spin" /> Tuning encoders…
-      </span>
+      <Badge variant="secondary" className="h-7 gap-1.5 px-2.5 text-[11px] font-normal text-muted-foreground" title="Measuring which encoders are fastest on this PC (runs once)">
+        <Spinner className="size-3" /> Tuning encoders…
+      </Badge>
     );
   }
   if (!report) return null;
@@ -82,13 +159,15 @@ function EncoderChip() {
     .join("\n");
   const hw = report.results.filter((r) => r.ok && r.hardware).map((r) => r.encoder);
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={rerun}
-      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted hover:bg-panel-3 hover:text-fg"
+      className="text-[11px] text-muted-foreground"
       title={`Fastest encoders on this PC:\n${summary}\n\n${report.ffmpegVersion}\nClick to re-run the benchmark.`}
     >
-      <Gauge size={13} className={hw.length ? "text-ok" : "text-muted"} />
+      <Gauge size={13} className={hw.length ? "text-ok" : "text-muted-foreground"} />
       {hw.length ? `GPU: ${hw.map((h) => h.split("_")[1]).filter((v, i, a) => a.indexOf(v) === i).join(", ").toUpperCase()}` : "CPU encoding"}
-    </button>
+    </Button>
   );
 }

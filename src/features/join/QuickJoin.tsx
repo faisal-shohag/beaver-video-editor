@@ -1,4 +1,6 @@
-import { Button, Dialog, IconButton } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { AppDialog, IconButton } from "@/components/editor";
 import { importPaths } from "@/features/media-bin/importer";
 import { startQuickJoin } from "@/features/export/jobs";
 import { VIDEO_EXTENSIONS, ipc } from "@/lib/ipc";
@@ -6,7 +8,7 @@ import { shortDuration } from "@/lib/time";
 import type { JoinCheck } from "@/lib/types";
 import { useUi } from "@/store/ui";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { ArrowDown, ArrowUp, CheckCircle2, FilePlus2, Loader2, TriangleAlert, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, FilePlus2, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /** Lossless joiner: same-format files are concatenated with stream copy in seconds. */
@@ -66,7 +68,7 @@ export function QuickJoin() {
   };
 
   return (
-    <Dialog
+    <AppDialog
       open={isOpen}
       onClose={close}
       title="Quick Join"
@@ -76,14 +78,14 @@ export function QuickJoin() {
           <Button variant="ghost" onClick={toTimeline} disabled={paths.length === 0} className="mr-auto">
             Add to timeline instead
           </Button>
-          <Button variant="primary" onClick={join} disabled={!check?.compatible || checking}>
+          <Button onClick={join} disabled={!check?.compatible || checking}>
             Join losslessly
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 p-4">
-        <p className="text-xs leading-relaxed text-muted">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           Files with identical format (codec, resolution, frame rate, audio) are joined without re-encoding — no
           quality loss, done in seconds. Different formats can be joined on the timeline and exported.
         </p>
@@ -117,12 +119,12 @@ export function QuickJoin() {
           })}
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={add}>
+          <Button variant="outline" onClick={add}>
             <FilePlus2 size={14} /> Add files
           </Button>
           {checking && (
-            <span className="flex items-center gap-1.5 text-xs text-muted">
-              <Loader2 size={13} className="spin" /> Checking formats…
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Spinner className="size-3.5" /> Checking formats…
             </span>
           )}
           {!checking && check?.compatible && (
@@ -131,12 +133,12 @@ export function QuickJoin() {
             </span>
           )}
           {!checking && check && !check.compatible && (
-            <span className="flex min-w-0 items-start gap-1.5 text-xs text-accent">
+            <span className="flex min-w-0 items-start gap-1.5 text-xs text-warn">
               <TriangleAlert size={14} className="mt-px shrink-0" /> <span>{check.reason}</span>
             </span>
           )}
         </div>
       </div>
-    </Dialog>
+    </AppDialog>
   );
 }

@@ -1,4 +1,7 @@
-import { IconButton, Kbd } from "@/components/ui";
+import { IconButton } from "@/components/editor";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { timecode } from "@/lib/time";
 import { projectDuration } from "@/store/ops";
 import { useProject } from "@/store/project";
@@ -50,11 +53,11 @@ export function Preview() {
   useEffect(fit, [width, height]);
 
   return (
-    <section className="flex h-full min-w-0 flex-col bg-bg" aria-label="Preview">
-      <div ref={areaRef} className="relative flex min-h-0 flex-1 items-center justify-center p-2">
-        <canvas ref={canvasRef} className="rounded-sm bg-black shadow-[0_0_0_1px_var(--color-line)]" />
+    <section className="flex h-full min-w-0 flex-col bg-panel" aria-label="Preview">
+      <div ref={areaRef} className="relative flex min-h-0 flex-1 items-center justify-center p-3 pb-1">
+        <canvas ref={canvasRef} className="rounded-xl bg-(--preview-bg) shadow-[0_0_0_1px_var(--border)]" />
         {empty && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-muted">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-muted-foreground">
             <p className="text-sm">Drop videos or audio anywhere to start</p>
             <p className="text-xs text-faint">
               Dropped on the timeline, files are joined back to back · <Kbd>Ctrl</Kbd>+<Kbd>I</Kbd> to import
@@ -71,16 +74,11 @@ export function Preview() {
 }
 
 function ProjectBadge() {
-  const { width, height, fps } = useProject((s) => s.project);
   const proxies = useRuntime((s) => Object.values(s.proxy).filter((p) => p === "pending").length);
+  if (proxies === 0) return null;
   return (
-    <div className="pointer-events-none absolute top-3 right-3 flex items-center gap-2 font-mono text-[10px] text-faint">
-      {proxies > 0 && (
-        <span className="rounded bg-panel-3 px-1.5 py-0.5 text-accent">building {proxies} preview proxy…</span>
-      )}
-      <span>
-        {width}×{height} · {fps}fps
-      </span>
+    <div className="pointer-events-none absolute top-3 right-3">
+      <Badge variant="secondary" className="text-warn">building {proxies} preview proxy…</Badge>
     </div>
   );
 }
@@ -96,8 +94,8 @@ function Transport() {
   const duration = projectDuration(project);
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-3 border-t border-line bg-panel px-3">
-      <Timecode />
+    <div className="flex h-14 shrink-0 items-center gap-3 px-4">
+      <Timecode duration={timecode(duration, project.fps)} />
       <div className="mx-auto flex items-center gap-0.5">
         <IconButton label="Mark in (I)" active={inPoint != null} onClick={() => set({ inPoint: useUi.getState().playhead })}>
           <SquareArrowDownRight size={16} />
@@ -108,14 +106,16 @@ function Transport() {
         <IconButton label="Previous frame (←)" onClick={() => stepFrames(-1)}>
           <SkipBack size={15} />
         </IconButton>
-        <button
+        <Button
+          variant="outline"
+          size="icon-lg"
           aria-label={playing ? "Pause (Space)" : "Play (Space)"}
           title={playing ? "Pause (Space)" : "Play (Space)"}
           onClick={() => engine.toggle()}
-          className="mx-1 flex h-8 w-8 items-center justify-center rounded-full bg-fg text-bg transition-transform hover:scale-105"
+          className="mx-1.5 size-9 rounded-full bg-card shadow-card transition-transform hover:scale-105"
         >
           {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
-        </button>
+        </Button>
         <IconButton label="Next frame (→)" onClick={() => stepFrames(1)}>
           <SkipForward size={15} />
         </IconButton>
@@ -126,16 +126,27 @@ function Transport() {
           <SquareArrowUpLeft size={16} />
         </IconButton>
       </div>
-      <div className="flex w-[180px] items-center justify-end gap-2 font-mono text-xs text-muted">
-        {shuttle > 1 && <span className="rounded bg-accent/15 px-1.5 text-accent">{shuttle}×</span>}
-        <span title="Timeline duration">{timecode(duration, project.fps)}</span>
+      <div className="flex w-[220px] items-center justify-end gap-2 font-mono text-xs text-muted-foreground">
+        {shuttle > 1 && <Badge variant="secondary">{shuttle}×</Badge>}
+        <span title="Project resolution and frame rate">
+          {project.width}×{project.height} · {project.fps}fps
+        </span>
       </div>
     </div>
   );
 }
 
-function Timecode() {
+function Timecode({ duration }: { duration: string }) {
   const t = useUi((s) => s.playhead);
   const fps = useProject((s) => s.project.fps);
-  return <div className="w-[180px] font-mono text-[15px] tracking-wide text-accent tabular-nums">{timecode(t, fps)}</div>;
+  return (
+    <div
+      className="flex h-9 w-[220px] items-center gap-2 rounded-[10px] border border-line px-3 font-mono text-xs tabular-nums"
+      title="Playhead / timeline duration"
+    >
+      <span className="text-foreground">{timecode(t, fps)}</span>
+      <span className="text-faint">/</span>
+      <span className="text-muted-foreground">{duration}</span>
+    </div>
+  );
 }

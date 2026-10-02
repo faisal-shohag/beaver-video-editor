@@ -6,11 +6,18 @@
 // timeline clock is slaved to the lowest active video element so picture and
 // sound never drift; other elements are nudged back when they wander.
 import { fileUrl } from "@/lib/ipc";
+import { THEME_EVENT } from "@/lib/theme";
 import type { Clip, MediaItem, Project } from "@/lib/types";
 import { clipEnd, projectDuration } from "@/store/ops";
 import { getProject, useProject } from "@/store/project";
 import { runtime, useRuntime } from "@/store/runtime";
 import { ui, useUi } from "@/store/ui";
+
+/** Colour of empty/letterboxed preview pixels; follows the theme (exports always render black). */
+let frameBg = "#000";
+const refreshFrameBg = () => {
+  frameBg = getComputedStyle(document.documentElement).getPropertyValue("--preview-bg").trim() || "#000";
+};
 
 interface Slot {
   el: HTMLVideoElement;
@@ -66,7 +73,18 @@ export class PreviewEngine {
   ) {
     this.ctx = canvas.getContext("2d", { alpha: false, desynchronized: true })!;
     const markDirty = () => (this.dirty = true);
-    this.unsubs.push(useProject.subscribe(markDirty), useUi.subscribe(markDirty), useRuntime.subscribe(markDirty));
+    refreshFrameBg();
+    const onTheme = () => {
+      refreshFrameBg();
+      markDirty();
+    };
+    window.addEventListener(THEME_EVENT, onTheme);
+    this.unsubs.push(
+      useProject.subscribe(markDirty),
+      useUi.subscribe(markDirty),
+      useRuntime.subscribe(markDirty),
+      () => window.removeEventListener(THEME_EVENT, onTheme),
+    );
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -319,7 +337,7 @@ export class PreviewEngine {
     const W = this.frameW;
     const H = this.frameH;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = frameBg;
     ctx.fillRect(0, 0, W, H);
     for (const track of p.tracks) {
       if (track.kind !== "video" || track.hidden) continue;

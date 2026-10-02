@@ -1,7 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
+import { initTheme } from "./lib/theme";
 import "./index.css";
+
+initTheme();
 
 // Block the webview's default context menu except in text fields.
 window.addEventListener("contextmenu", (e) => {

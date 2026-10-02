@@ -1,4 +1,8 @@
-import { Button } from "@/components/ui";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ExportDialog } from "@/features/export/ExportDialog";
 import { ExportQueue } from "@/features/export/ExportQueue";
 import { listenToEnhance } from "@/features/enhance/enhance";
@@ -12,13 +16,14 @@ import { Timeline, timelineDrop } from "@/features/timeline/Timeline";
 import { ipc } from "@/lib/ipc";
 import { getProject, useProject } from "@/store/project";
 import { useRuntime } from "@/store/runtime";
-import { ui, useUi } from "@/store/ui";
+import { useUi } from "@/store/ui";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
-import clsx from "clsx";
 import { FileDown, History } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast as sonner } from "sonner";
+import { useDefaultLayout } from "react-resizable-panels";
 import { restoreAutosave, serialize } from "./actions";
 import { installShortcuts } from "./shortcuts";
 import { TopBar } from "./TopBar";
@@ -36,6 +41,8 @@ export function App() {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [fileOver, setFileOver] = useState(false);
   const [autosave, setAutosave] = useState<string | null>(null);
+
+  const panelLayout = useDefaultLayout({ id: "beaver.panels", storage: localStorage });
 
   useEffect(() => installShortcuts(), []);
 
@@ -138,15 +145,15 @@ export function App() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <TooltipProvider delayDuration={400}>
+    <div className="flex h-full flex-col px-3 pt-2 pb-3">
       <TopBar />
       {autosave && (
-        <div className="flex items-center gap-3 border-b border-accent/30 bg-accent/10 px-4 py-2 text-[13px]">
-          <History size={15} className="text-accent" />
+        <Alert className="mb-2 flex items-center gap-3 rounded-xl px-4 py-2 text-[13px] shadow-card">
+          <History size={15} className="text-warn" />
           <span>Your previous session wasn't saved. Restore it?</span>
           <Button
             size="sm"
-            variant="primary"
             onClick={() => {
               restoreAutosave(autosave);
               setAutosave(null);
@@ -164,66 +171,79 @@ export function App() {
           >
             Discard
           </Button>
-        </div>
+        </Alert>
       )}
-      <main className="flex min-h-0 flex-1">
-        <div className="w-[260px] shrink-0 border-r border-line">
-          <MediaBin />
-        </div>
-        <div className="min-w-0 flex-1">
-          <Preview />
-        </div>
-        <div className="w-[300px] shrink-0 border-l border-line">
-          <Inspector />
-        </div>
-      </main>
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        defaultLayout={panelLayout.defaultLayout}
+        onLayoutChanged={panelLayout.onLayoutChanged}
+      >
+        <ResizablePanel id="media" defaultSize="24.5%" minSize={200} maxSize="40%" groupResizeBehavior="preserve-pixel-size">
+          <div className="h-full overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            <MediaBin />
+          </div>
+        </ResizablePanel>
+        <PanelGap />
+        <ResizablePanel id="preview" minSize={360}>
+          <div className="h-full overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            <Preview />
+          </div>
+        </ResizablePanel>
+        <PanelGap />
+        <ResizablePanel id="inspector" defaultSize="27.5%" minSize={240} maxSize="40%" groupResizeBehavior="preserve-pixel-size">
+          <div className="h-full overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            <Inspector />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
       <div
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize timeline"
         onPointerDown={startResize}
-        className="h-1 shrink-0 cursor-row-resize bg-line transition-colors hover:bg-accent/60"
-      />
-      <div ref={timelineRef} className="shrink-0" style={{ height: timelineH }}>
+        className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center"
+      >
+        <div className="h-1 w-12 rounded-full bg-transparent transition-colors group-hover:bg-line-strong" />
+      </div>
+      <div ref={timelineRef} className="shrink-0 overflow-hidden rounded-2xl border border-border bg-panel shadow-card" style={{ height: timelineH }}>
         <Timeline />
       </div>
 
+      <Toaster position="bottom-center" />
       <ExportDialog />
       <QuickJoin />
       <ExportQueue />
       <Toast />
       <DragGhost />
       {fileOver && (
-        <div className="pointer-events-none fixed inset-2 z-40 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent/5">
-          <div className="flex items-center gap-2 rounded-lg bg-panel-2 px-4 py-2 text-sm shadow-xl">
-            <FileDown size={16} className="text-accent" /> Drop to import — onto the timeline to place clips
+        <div className="pointer-events-none fixed inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-primary/5">
+          <div className="flex items-center gap-2 rounded-xl bg-panel px-4 py-2 text-sm shadow-pop">
+            <FileDown size={16} className="text-primary" /> Drop to import — onto the timeline to place clips
           </div>
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
+/** The 12px gutter between cards doubles as the drag handle; a pill shows on hover/drag. */
+function PanelGap() {
+  return (
+    <ResizableHandle className="w-3 bg-transparent before:absolute before:inset-y-1/3 before:left-1/2 before:w-1 before:-translate-x-1/2 before:rounded-full before:bg-transparent before:transition-colors after:w-3 hover:before:bg-border data-[separator=active]:before:bg-ring" />
+  );
+}
+
+/** Bridges the `notify` store action to sonner toasts. */
 function Toast() {
   const toast = useUi((s) => s.toast);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => ui().set({ toast: null }), toast.kind === "error" ? 6000 : 2500);
-    return () => clearTimeout(id);
+    if (toast.kind === "error") sonner.error(toast.text, { id: toast.id, duration: 6000, className: "whitespace-pre-line" });
+    else sonner(toast.text, { id: toast.id, duration: 2500, className: "whitespace-pre-line" });
   }, [toast]);
-  if (!toast) return null;
-  return (
-    <div
-      key={toast.id}
-      role="status"
-      className={clsx(
-        "toast-in fixed bottom-4 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-lg border px-4 py-2 text-[13px] whitespace-pre-line shadow-xl",
-        toast.kind === "error" ? "border-danger/40 bg-[#2a1416] text-[#ffb4b8]" : "border-line bg-panel-2 text-fg",
-      )}
-    >
-      {toast.text}
-    </div>
-  );
+  return null;
 }
 
 function DragGhost() {
@@ -233,7 +253,7 @@ function DragGhost() {
   const first = media.find((m) => m.id === drag.ids[0]);
   return (
     <div
-      className="pointer-events-none fixed z-50 rounded-md bg-accent px-2 py-1 text-xs font-medium text-accent-fg shadow-lg"
+      className="pointer-events-none fixed z-50 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-pop"
       style={{ left: drag.x + 12, top: drag.y + 12 }}
     >
       {first?.name}
