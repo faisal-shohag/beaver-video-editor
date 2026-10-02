@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Light and dark themes, with a System option and a toggle in the top bar. The choice is remembered and applied before first paint.
+- New app icon and logo.
+- Click the project name in the top bar to rename it; exports and Save As default to that name.
+- Resizable Media and Inspector panels (widths are remembered) and a media grid that adds columns as the panel widens.
+- Clip inspector tabs: Clip, Speed, Video and Audio.
+
+### Changed
+
+- Redesigned interface on shadcn/ui: floating cards, hairline borders, a zinc dark palette and a lighter light mode.
+- Resolution and frame rate now sit at the bottom right of the preview.
+- Selected clips on the timeline have a red-orange border.
+
+### Fixed
+
+- Splitting a clip no longer leaves both halves selected, and clicking one clip in a multi-selection now selects only that clip.
+
 ## [0.2.0] - 2026-09-30
 
 ### Added
