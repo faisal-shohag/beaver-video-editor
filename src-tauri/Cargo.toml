@@ -1,6 +1,6 @@
 [package]
 name = "beaver-video-editor"
-version = "0.2.0"
+version = "0.3.0"
 description = "Fast, simple multi-track video editor"
 authors = ["faisal-shohag"]
 license = "MIT"

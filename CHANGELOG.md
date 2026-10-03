@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-03
+
 ### Added
 
 - Light and dark themes, with a System option and a toggle in the top bar. The choice is remembered and applied before first paint.
@@ -64,6 +66,7 @@ First public release.
 - **Projects:** `.beaver` project files, undo/redo (200 steps), crash-safe autosave with restore, and a warning before quitting with unsaved changes.
 - **Installers:** Windows NSIS and MSI installers with FFmpeg bundled.
 
-[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/faisal-shohag/beaver-video-editor/releases/tag/v0.1.0
