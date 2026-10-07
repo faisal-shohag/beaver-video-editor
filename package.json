@@ -33,7 +33,7 @@
     "cn": "^0.4.0",
     "date-fns": "^4.4.0",
     "embla-carousel-react": "^8.6.0",
-    "immer": "^11.1.18",
+    "immer": "^11.1.21",
     "input-otp": "^1.5.0",
     "lucide-react": "^1.48.0",
     "radix-ui": "^1.6.7",
