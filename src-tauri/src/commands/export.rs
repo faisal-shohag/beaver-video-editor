@@ -9,7 +9,7 @@ use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Serialize, Clone)]
@@ -251,9 +251,59 @@ fn turbo_export(
     Ok(format!("{encoder} ×{n_workers} parallel"))
 }
 
-fn finish(app: &AppHandle, job_id: &str, output: &str, started: Instant, encoder: String, result: Result<(), String>) {
+/// Paths name the same file. Windows paths ignore case and accept either slash, so
+/// existing files are compared by their canonical path and the rest textually.
+fn same_file(a: &str, b: &str) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => {
+            let norm = |p: &str| p.replace('/', "\\").to_lowercase();
+            norm(a) == norm(b)
+        }
+    }
+}
+
+/// Refuse an output path that is one of the export's own inputs: FFmpeg would bail
+/// out, and the failure cleanup would then delete the source.
+fn check_output_not_input<'a>(output: &str, inputs: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
+    match inputs.into_iter().find(|i| same_file(output, i)) {
+        Some(i) => {
+            let name =
+                Path::new(i).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| i.to_string());
+            Err(format!(
+                "Can't export over \"{name}\": it is one of the files being exported. Pick a different file name."
+            ))
+        }
+        None => Ok(()),
+    }
+}
+
+fn project_inputs(project: &Project) -> impl Iterator<Item = &str> {
+    project.media.iter().map(|m| m.info.path.as_str()).chain(project.clips.iter().filter_map(|c| c.enhanced_audio()))
+}
+
+fn modified(path: &str) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Only a partial file this job wrote may be removed after a failure; a pre-existing
+/// file FFmpeg never touched is the user's and stays.
+fn wrote_output(output: &str, before: Option<SystemTime>) -> bool {
+    before.is_none() || modified(output) != before
+}
+
+/// `before` is the output's mtime when the job started (`None` if it didn't exist).
+fn finish(
+    app: &AppHandle,
+    job_id: &str,
+    output: &str,
+    before: Option<SystemTime>,
+    started: Instant,
+    encoder: String,
+    result: Result<(), String>,
+) {
     let cancelled = matches!(&result, Err(e) if e == "cancelled");
-    if result.is_err() {
+    if result.is_err() && wrote_output(output, before) {
         let _ = std::fs::remove_file(output);
     }
     let size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
@@ -290,6 +340,8 @@ pub fn start_export(
     if project.clips.is_empty() {
         return Err("Timeline is empty".into());
     }
+    check_output_not_input(&settings.output_path, project_inputs(&project))?;
+    let before = modified(&settings.output_path);
     let job = state.register(&job_id);
     std::thread::spawn(move || {
         let started = Instant::now();
@@ -316,7 +368,7 @@ pub fn start_export(
             Ok(e) => (e, Ok(())),
             Err(e) => (encoder, Err(e)),
         };
-        finish(&app, &job_id, &settings.output_path, started, used, res);
+        finish(&app, &job_id, &settings.output_path, before, started, used, res);
     });
     Ok(())
 }
@@ -382,6 +434,8 @@ pub fn quick_join(
     paths: Vec<String>,
     output: String,
 ) -> Result<(), String> {
+    check_output_not_input(&output, paths.iter().map(String::as_str))?;
+    let before = modified(&output);
     let job = state.register(&job_id);
     std::thread::spawn(move || {
         let started = Instant::now();
@@ -425,7 +479,40 @@ pub fn quick_join(
             let total = check.total_duration.max(0.001);
             run_tracked(&args, &job, |p| rep.emit(p.out_time / total, p.fps, p.speed, "Joining", p.done))
         })();
-        finish(&app, &job_id, &output, started, "stream copy".into(), result);
+        finish(&app, &job_id, &output, before, started, "stream copy".into(), result);
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_file(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("beaver-export-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(name);
+        std::fs::write(&p, b"source").unwrap();
+        p
+    }
+
+    #[test]
+    fn output_matching_an_input_is_refused_ignoring_case_and_slashes() {
+        let src = temp_file("Lesson Source.mp4");
+        let s = src.to_string_lossy().to_string();
+        let shouted = s.to_uppercase().replace('\\', "/");
+        let err = check_output_not_input(&shouted, [s.as_str()]).unwrap_err();
+        assert!(err.contains("Lesson Source.mp4"), "{err}");
+        let other = src.with_file_name("Lesson Export.mp4");
+        assert!(check_output_not_input(&other.to_string_lossy(), [s.as_str()]).is_ok());
+    }
+
+    #[test]
+    fn untouched_existing_output_is_kept_after_failure() {
+        let src = temp_file("existing.mp4");
+        let s = src.to_string_lossy().to_string();
+        let before = modified(&s);
+        assert!(!wrote_output(&s, before), "file FFmpeg never opened must not be deleted");
+        assert!(wrote_output(&src.with_file_name("new.mp4").to_string_lossy(), None));
+    }
 }
