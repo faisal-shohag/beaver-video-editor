@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Exporting to the path of a file the project uses (for example, picking the source video in the Save dialog) no longer deletes that file. The export dialog now warns and disables Export, and the export is refused before it starts.
+- A failed export only removes the output file if the export itself wrote it, so an existing file is never deleted just because an export failed.
+
 ## [0.3.1] - 2026-10-17
 
 ### Fixed

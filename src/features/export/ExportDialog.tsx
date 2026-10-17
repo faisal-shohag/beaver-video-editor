@@ -69,6 +69,13 @@ function ExportForm({ onDone }: { onDone: () => void }) {
   const total = projectDuration(project);
   const duration = useRange && hasRange ? outPoint! - inPoint! : total;
   const audioOnly = VIDEO_CODECS_FOR[s.container].length === 0 && s.container !== "gif";
+  // Exporting over one of the project's own files would destroy it; the backend refuses it too.
+  const overwritesSource = useMemo(() => {
+    const norm = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+    const out = norm(s.outputPath);
+    const inputs = [...project.media.map((m) => m.path), ...project.clips.map((c) => c.enhance?.path ?? "")];
+    return out !== "" && inputs.some((p) => p && norm(p) === out);
+  }, [s.outputPath, project.media, project.clips]);
   const update = (p: Partial<ExportSettings>) => {
     setPresetId(null);
     setS((prev) => normalise({ ...prev, ...p }));
@@ -248,6 +255,11 @@ function ExportForm({ onDone }: { onDone: () => void }) {
                 <FolderOpen size={14} /> Browse
               </Button>
             </div>
+            {overwritesSource && (
+              <p role="alert" className="mt-1.5 text-xs text-destructive">
+                This file is used in the project. Exporting over it would destroy it, so pick a different name.
+              </p>
+            )}
           </Field>
 
           <Field label="Export engine">
@@ -497,7 +509,7 @@ function ExportForm({ onDone }: { onDone: () => void }) {
                 </Button>
               </form>
             )}
-            <Button onClick={go} disabled={total <= 0} className="px-5">
+            <Button onClick={go} disabled={total <= 0 || overwritesSource} className="px-5">
               Export
             </Button>
           </div>
