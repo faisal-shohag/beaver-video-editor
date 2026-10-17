@@ -180,16 +180,9 @@ pub fn build_render(spec: &RenderSpec) -> Result<RenderPlan, String> {
 
     let mut inputs = Inputs { args: vec![], count: 0 };
     let mut f = String::new();
-    // Input index per clip id so video and audio of one clip share a decoder.
-    let mut input_of: Vec<(String, usize)> = vec![];
-    let mut input_for = |piece: &Piece, inputs: &mut Inputs| -> usize {
-        if let Some((_, i)) = input_of.iter().find(|(id, _)| *id == piece.clip.id) {
-            return *i;
-        }
-        let i = inputs.add(&piece.media.info.path, piece);
-        input_of.push((piece.clip.id.clone(), i));
-        i
-    };
+    // Video and audio of a clip get separate inputs: video is consumed in order by
+    // `concat` while every clip's audio is pulled from t=0 by `adelay`/`amix`, and a
+    // shared input then buffers without bound on long timelines (ENOMEM mid-export).
 
     // ---------- video ----------
     if want_video {
@@ -238,7 +231,7 @@ pub fn build_render(spec: &RenderSpec) -> Result<RenderPlan, String> {
                     .unwrap();
                     segs.push(label);
                 }
-                let idx = input_for(&pc, &mut inputs);
+                let idx = inputs.add(&pc.media.info.path, &pc);
                 let seg_dur = pc.out_end - pc.out_start;
                 let label = format!("t{ti}c{pi}");
                 let c = pc.clip;
@@ -354,7 +347,7 @@ pub fn build_render(spec: &RenderSpec) -> Result<RenderPlan, String> {
                 // Enhanced audio lives in its own file on the media's timeline, so the same trim applies.
                 let idx = match c.enhanced_audio() {
                     Some(path) => inputs.add(path, &pc),
-                    None => input_for(&pc, &mut inputs),
+                    None => inputs.add(&pc.media.info.path, &pc),
                 };
                 let seg_dur = pc.out_end - pc.out_start;
                 let label = format!("a{}", labels.len());
@@ -920,6 +913,18 @@ mod tests {
         assert!(pl.filter.contains("adelay=delays=4000:all=1"));
         assert!(pl.filter.contains("amix=inputs=2"));
         assert!(args.windows(2).any(|w| w[0] == "-crf" && w[1] == "22"));
+    }
+
+    #[test]
+    fn video_and_audio_never_share_an_input() {
+        let p = project(vec![clip("c1", "m1", "v1", 0.0, 0.0, 4.0), clip("c2", "m1", "v1", 4.0, 6.0, 10.0)]);
+        let pl = plan(&p, &settings());
+        assert_eq!(pl.inputs.iter().filter(|a| *a == "-i").count(), 4, "{:?}", pl.inputs);
+        for k in 0..4 {
+            let v = pl.filter.contains(&format!("[{k}:v]"));
+            let a = pl.filter.contains(&format!("[{k}:a]"));
+            assert!(v != a, "input {k} feeds both video and audio:\n{}", pl.filter);
+        }
     }
 
     #[test]
