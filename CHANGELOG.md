@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-17
+
 ### Fixed
 
 - Exporting to the path of a file the project uses (for example, picking the source video in the Save dialog) no longer deletes that file. The export dialog now warns and disables Export, and the export is refused before it starts.
@@ -77,7 +79,8 @@ First public release.
 - **Projects:** `.beaver` project files, undo/redo (200 steps), crash-safe autosave with restore, and a warning before quitting with unsaved changes.
 - **Installers:** Windows NSIS and MSI installers with FFmpeg bundled.
 
-[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/faisal-shohag/beaver-video-editor/compare/v0.1.0...v0.2.0
